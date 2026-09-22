@@ -113,6 +113,65 @@ INSERT INTO ia_uso.precos (modelo, eur_entrada_1m, eur_saida_1m, eur_pensamento_
   ('gemini-flash-lite-latest', 0.10, 0.40, NULL, 0.030, 'o ponteiro do lite')
 ON CONFLICT (modelo) DO NOTHING;
 
+-- ── Houve pesquisa Google, ou não? ────────────────────────────────────
+-- A `registos.pesquisa_web` NUNCA teve um significado definido, e as nove
+-- Edge Functions inventaram um cada uma: a `catalogo-info` e a
+-- `verificar-vinhos` pesquisam SEMPRE e não gravam a coluna; a
+-- `vinho-info` grava um ESTADO em texto, que dá verdadeiro tanto para o
+-- grounding da Google — faturado por pedido — como para a pesquisa
+-- externa do motor `gratis`, que é paga a outro fornecedor; só a
+-- `sugerir-vinho` e a `calendario-sporting` gravam um booleano a sério.
+--
+-- A pergunta decide-se AQUI e não lá, e é de propósito: "que chamadas
+-- pagaram uma pesquisa à Google" é uma pergunta de CUSTO, logo é desta
+-- app. É o mesmo movimento da `winecatalog.forca()` — o catálogo decide
+-- quanto vale a afirmação de cada origem, em vez de pedir a cada escritor
+-- que se auto-declare com honestidade. E tem uma vantagem que um deploy
+-- não tem: arruma o HISTÓRICO, que já está escrito e não se redeploya.
+--
+-- ANTES DISTO, as chamadas da `catalogo-info` pesavam ~0,001 contra os
+-- ~0,030 das da `vinho-info` — pareciam trinta vezes mais baratas só por
+-- lhes faltar a bandeira, e levavam uma fatia do euro real a condizer.
+CREATE TABLE IF NOT EXISTS ia_uso.funcoes (
+  funcao    text PRIMARY KEY,
+  grounding boolean NOT NULL,
+  nota      text
+);
+
+INSERT INTO ia_uso.funcoes (funcao, grounding, nota) VALUES
+  ('catalogo-info',       true,  'pesquisa sempre; NÃO grava a coluna — a regra daqui é a única fonte'),
+  ('verificar-vinhos',    true,  'pesquisa sempre, e é a chamada mais cara; NÃO grava a coluna'),
+  ('vinho-info',          true,  'grava o estado em TEXTO: só "grounding:" é que a Google fatura'),
+  ('sugerir-vinho',       true,  'grava a coluna a sério, em booleano'),
+  ('calendario-sporting', true,  'grava a coluna a sério; pode cair numa variante sem pesquisa'),
+  ('catalogo-foto',       false, 'visão sobre uma fotografia — nunca pesquisa'),
+  ('importar-vinhos',     false, 'lê fotos de rótulos — nunca pesquisa'),
+  ('fatura-restaurante',  false, 'OCR de um talão'),
+  ('fatura-ocr',          false, 'OCR de um talão')
+ON CONFLICT (funcao) DO NOTHING;
+
+-- Do mais específico para o mais geral: o que a própria CHAMADA disser
+-- ganha à regra da FUNÇÃO, e a regra da função só entra quando a chamada
+-- não disse nada. Sem regra nenhuma, não se cobra pesquisa — mas a função
+-- aparece em `semRegra` no resumo, para não descer a conta em silêncio.
+CREATE OR REPLACE FUNCTION ia_uso.grounding(r ia_uso.registos)
+RETURNS boolean
+LANGUAGE sql STABLE
+SET search_path TO 'ia_uso', 'public'
+AS $$
+  SELECT CASE
+    WHEN jsonb_typeof(r.detalhe -> 'pesquisa') = 'string'
+      THEN (r.detalhe ->> 'pesquisa') LIKE 'grounding:%'
+    -- A `sugerir-vinho` e a `calendario-sporting` são as duas que podem
+    -- cair numa variante SEM pesquisa a meio da mesma função: o booleano
+    -- que elas gravam sabe mais do que qualquer regra por função.
+    WHEN jsonb_typeof(r.detalhe -> 'pesquisa') = 'boolean'
+      THEN (r.detalhe -> 'pesquisa')::boolean
+    WHEN r.pesquisa_web IS NOT NULL THEN r.pesquisa_web
+    ELSE COALESCE((SELECT f.grounding FROM ia_uso.funcoes f WHERE f.funcao = r.funcao), false)
+  END;
+$$;
+
 -- ── O peso de uma chamada ──────────────────────────────────────────────
 -- UMA SÓ DEFINIÇÃO disto, e é esta. Se um dia o peso passar a contar mais
 -- alguma coisa (cache de contexto, imagens à parte), muda-se aqui e o
@@ -132,7 +191,7 @@ AS $$
     + COALESCE(r.tokens_saida, 0)      * p.eur_saida_1m
     + COALESCE(r.tokens_pensamento, 0) * COALESCE(p.eur_pensamento_1m, p.eur_saida_1m)
     ) / 1000000.0
-    + CASE WHEN r.pesquisa_web THEN p.eur_pesquisa ELSE 0 END
+    + CASE WHEN ia_uso.grounding(r) THEN p.eur_pesquisa ELSE 0 END
   FROM ia_uso.precos p
   WHERE p.modelo IN (COALESCE(r.modelo, '*'), '*')
   ORDER BY (p.modelo = '*')
@@ -310,13 +369,24 @@ BEGIN
   END IF;
 
   RETURN (
+    -- `m` é um CTE com colunas a mais, por isso `m.*::ia_uso.registos` é
+    -- um record com colunas a mais e o Postgres recusa-o — e só o diz
+    -- quando a função CORRE. É a mesma pedra da `winecatalog.listar`: a
+    -- linha tem de ser pesada ANTES de entrar no CTE.
     WITH m AS (
-      SELECT r.*, c.custo_eur, c.provisorio
+      SELECT r.*, c.custo_eur, c.provisorio, ia_uso.grounding(r) AS com_pesquisa
         FROM ia_uso.registos r JOIN ia_uso.calc() c ON c.id = r.id
     )
     SELECT jsonb_build_object(
       'janelaDias', p_dias,
       'calibrado', EXISTS (SELECT 1 FROM ia_uso.fatores() WHERE fator IS NOT NULL),
+      -- Uma décima função que pesquise sempre e não grave a coluna ficava
+      -- com a pesquisa por contar, e a conta descia sozinha — que é a pior
+      -- maneira de uma conta estar errada. Assim aparece no painel.
+      'semRegra', COALESCE((
+        SELECT jsonb_agg(DISTINCT m.funcao) FROM m
+         WHERE NOT EXISTS (SELECT 1 FROM ia_uso.funcoes f WHERE f.funcao = m.funcao)
+      ), '[]'::jsonb),
       'porApp', COALESCE((
         SELECT jsonb_agg(x ORDER BY (x ->> 'pedidos')::int DESC) FROM (
           SELECT jsonb_build_object(
@@ -327,6 +397,7 @@ BEGIN
             'tokensEntrada', COALESCE(sum(m.tokens_entrada), 0),
             'tokensSaida', COALESCE(sum(m.tokens_saida), 0),
             'tokensPensamento', COALESCE(sum(m.tokens_pensamento), 0),
+            'pesquisas', count(*) FILTER (WHERE m.com_pesquisa),
             'custoEur', sum(m.custo_eur),
             'estimadoEur', COALESCE(sum(m.custo_estimado_eur), 0),
             'provisorio', bool_or(m.provisorio),
@@ -342,6 +413,7 @@ BEGIN
             'tokensEntrada', COALESCE(sum(m.tokens_entrada), 0),
             'tokensSaida', COALESCE(sum(m.tokens_saida), 0),
             'tokensPensamento', COALESCE(sum(m.tokens_pensamento), 0),
+            'pesquisas', count(*) FILTER (WHERE m.com_pesquisa),
             'custoEur', sum(m.custo_eur),
             'estimadoEur', COALESCE(sum(m.custo_estimado_eur), 0)
           ) AS x FROM m GROUP BY m.modelo
@@ -498,9 +570,10 @@ $$;
 -- aberta calada.
 ALTER TABLE ia_uso.leituras ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ia_uso.precos   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ia_uso.funcoes  ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT ON ia_uso.leituras, ia_uso.precos TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ia_uso.leituras, ia_uso.precos TO service_role;
+GRANT SELECT ON ia_uso.leituras, ia_uso.precos, ia_uso.funcoes TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ia_uso.leituras, ia_uso.precos, ia_uso.funcoes TO service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ia_uso TO service_role;
 
 GRANT EXECUTE ON FUNCTION
@@ -520,11 +593,12 @@ GRANT EXECUTE ON FUNCTION
 --
 -- FUNÇÃO INTERNA NOVA = mais uma linha aqui. Não dá erro esquecê-la; dá
 -- uma porta aberta calada, que é a pior espécie.
+REVOKE ALL ON FUNCTION ia_uso.grounding(ia_uso.registos) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION ia_uso.peso(ia_uso.registos) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION ia_uso.fatores()             FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION ia_uso.calc()                FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION ia_uso.peso(ia_uso.registos), ia_uso.fatores(), ia_uso.calc()
-  TO service_role;
+GRANT EXECUTE ON FUNCTION ia_uso.grounding(ia_uso.registos), ia_uso.peso(ia_uso.registos),
+  ia_uso.fatores(), ia_uso.calc() TO service_role;
 
 -- As que a app chama ficam fechadas ao anon — ninguém entra aqui sem
 -- login, e o schema inteiro também não tem de estar à vista dele.
@@ -543,6 +617,10 @@ CREATE POLICY leituras_admin_le ON ia_uso.leituras
 
 DROP POLICY IF EXISTS precos_admin_le ON ia_uso.precos;
 CREATE POLICY precos_admin_le ON ia_uso.precos
+  FOR SELECT TO authenticated USING (ia_uso.sou_admin());
+
+DROP POLICY IF EXISTS funcoes_admin_le ON ia_uso.funcoes;
+CREATE POLICY funcoes_admin_le ON ia_uso.funcoes
   FOR SELECT TO authenticated USING (ia_uso.sou_admin());
 
 -- ── Conferir depois de correr ──────────────────────────────────────────
