@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c2430">
+<title>AI API Control</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- O splash tapa tudo até se saber se há sessão. Sem ele via-se o ecrã de
+     login a piscar a quem já estava autenticado. -->
+<div id="splash"><div class="sp-mark">€</div><div class="sp-txt">AI API Control</div></div>
+
+<!-- ══ LOGIN ══ -->
+<section id="page-login" class="auth" style="display:none">
+  <div class="auth-box">
+    <h1>AI API Control</h1>
+    <p class="auth-sub">O que as apps gastam no Gemini.</p>
+    <input id="login-email" type="email" placeholder="email" autocomplete="username">
+    <input id="login-pass" type="password" placeholder="password" autocomplete="current-password">
+    <button class="pri" onclick="sbLoginEmail()">Entrar</button>
+    <button class="sec" onclick="sbLoginGoogle()">Entrar com Google</button>
+    <div class="auth-links">
+      <button class="lnk" onclick="sbRegistarEmail()">Criar conta</button>
+      <button class="lnk" onclick="sbRecuperarPassword()">Esqueci-me da password</button>
+    </div>
+    <!-- O código de 6 dígitos é a saída garantida: ler um email não o gasta,
+         ao contrário do link, que os scanners de segurança abrem primeiro. -->
+    <div id="login-codigo" style="display:none">
+      <p class="auth-sub">Escreve aqui o código de 6 dígitos que veio no email.</p>
+      <input id="login-cod" type="text" inputmode="numeric" maxlength="6" placeholder="000000">
+      <button class="pri" onclick="sbVerificarCodigo()">Confirmar código</button>
+    </div>
+    <div id="login-status" class="auth-status" style="display:none"></div>
+  </div>
+</section>
+
+<!-- ══ PASSWORD NOVA ══ -->
+<section id="page-nova-pass" class="auth" style="display:none">
+  <div class="auth-box">
+    <h1>Password nova</h1>
+    <input id="np1" type="password" placeholder="password nova" autocomplete="new-password">
+    <input id="np2" type="password" placeholder="repete a password" autocomplete="new-password">
+    <button class="pri" onclick="sbDefinirNovaPassword()">Guardar</button>
+    <div id="np-status" class="auth-status" style="display:none"></div>
+  </div>
+</section>
+
+<!-- ══ SEM ACESSO ══
+     Não há "solicitar acesso" aqui, ao contrário das apps irmãs: o `ia_uso`
+     não tem `allowed_users` nem `access_requests` — tem UM dono
+     (`ia_uso.config.admin_email`). Não há a quem pedir de dentro da app. -->
+<section id="page-sem-acesso" class="auth" style="display:none">
+  <div class="auth-box">
+    <h1>Sem acesso</h1>
+    <p id="sem-acesso-email" class="auth-sub"></p>
+    <p class="auth-sub">Este painel tem um dono só, e passa-se por
+      <code>ia_uso.definir_admin()</code> no SQL Editor do Supabase.</p>
+    <button class="sec" onclick="sbSair()">Sair</button>
+  </div>
+</section>
+
+<!-- ══ A APP ══ -->
+<section id="app-sec" style="display:none">
+  <header>
+    <div class="hd-t">AI API Control</div>
+    <button class="hd-rec" onclick="recarregar()" title="Recarregar" aria-label="Recarregar">&#10227;</button>
+  </header>
+
+  <nav class="itabs">
+    <button class="it on" data-tab="resumo"   onclick="itab('resumo')">Resumo</button>
+    <button class="it"    data-tab="registos" onclick="itab('registos')">Registos</button>
+    <button class="it"    data-tab="saldo"    onclick="itab('saldo')">Saldo</button>
+    <button class="it"    data-tab="defs"     onclick="itab('defs')">Definições</button>
+  </nav>
+
+  <!-- ── RESUMO ── -->
+  <div id="t-resumo" class="tp on">
+    <div id="rs-aviso"></div>
+    <div class="jan">
+      <span class="jan-l">Janela</span>
+      <div class="segs" id="rs-janela">
+        <button class="seg" data-d="7"   onclick="rsJanela(7)">7 dias</button>
+        <button class="seg on" data-d="30" onclick="rsJanela(30)">30 dias</button>
+        <button class="seg" data-d="90"  onclick="rsJanela(90)">90 dias</button>
+      </div>
+    </div>
+    <div id="rs-topo"></div>
+    <div id="rs-apps"></div>
+    <div id="rs-modelos"></div>
+  </div>
+
+  <!-- ── REGISTOS ── -->
+  <div id="t-registos" class="tp">
+    <div class="card filtros">
+      <div class="fl">
+        <label for="rg-app">App</label>
+        <select id="rg-app" onchange="rgCarregar()"><option value="">todas</option></select>
+      </div>
+      <div class="fl">
+        <label for="rg-estado">Estado</label>
+        <select id="rg-estado" onchange="rgDesenhar()">
+          <option value="">todos</option>
+          <option value="ok">ok</option>
+          <option value="erro">erro</option>
+          <option value="pedido">pedido</option>
+          <option value="vazio">200 vazio</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label for="rg-limite">Linhas</label>
+        <select id="rg-limite" onchange="rgCarregar()">
+          <option>100</option><option selected>200</option><option>500</option><option>1000</option>
+        </select>
+      </div>
+    </div>
+    <div id="rg-lista"></div>
+  </div>
+
+  <!-- ── SALDO ── -->
+  <div id="t-saldo" class="tp">
+    <div class="card">
+      <h2>Registar uma leitura</h2>
+      <p class="nota">O que o painel da Google diz agora. Entre esta leitura
+        e a anterior há um euro observado — e é ele que reparte o custo pelas
+        chamadas que caíram no meio.</p>
+      <div class="fgrid">
+        <div class="fl">
+          <label for="lt-tipo">O que estás a ler</label>
+          <select id="lt-tipo" onchange="ltSync()">
+            <option value="saldo">Saldo que resta (desce)</option>
+            <option value="gasto">Gasto acumulado (sobe)</option>
+          </select>
+        </div>
+        <div class="fl">
+          <label for="lt-valor">Valor (€)</label>
+          <input id="lt-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
+        </div>
+        <div class="fl" id="lt-carr-box">
+          <label for="lt-carregado">Carregado desde a última (€)</label>
+          <input id="lt-carregado" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
+        </div>
+        <div class="fl">
+          <label for="lt-quando">Quando</label>
+          <input id="lt-quando" type="datetime-local">
+        </div>
+        <div class="fl fl-w">
+          <label for="lt-nota">Nota (opcional)</label>
+          <input id="lt-nota" type="text" maxlength="120" placeholder="ex.: carreguei 20 € a 12/set">
+        </div>
+      </div>
+      <p class="nota" id="lt-dica"></p>
+      <button class="pri" onclick="ltGuardar()">Registar leitura</button>
+    </div>
+    <div id="lt-janelas"></div>
+    <div id="lt-lista"></div>
+  </div>
+
+  <!-- ── DEFINIÇÕES ── -->
+  <div id="t-defs" class="tp">
+    <div class="card">
+      <h2>Rácios por modelo</h2>
+      <p class="nota">Não são a tabela de preços da Google e não têm de bater
+        certo com ela — só importa a <b>proporção</b> entre eles. A escala vem
+        toda do fator de cada janela, e é isso que os torna seguros de errar.
+        A linha <code>*</code> é a de recurso, para um modelo que apareça sem
+        estar aqui.</p>
+      <div id="pr-lista"></div>
+    </div>
+    <div class="card">
+      <h2>Conta</h2>
+      <p id="conta-email" class="nota"></p>
+      <p id="conta-papel" class="nota"></p>
+      <button class="sec" onclick="sbAlterarPassword()">Mudar a password</button>
+      <button class="sec" onclick="sbSair()">Sair</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FICHA DE UM REGISTO ══ -->
+<div id="modal-registo" class="modal" onclick="fecharFundo(event,'modal-registo')">
+  <div class="mbox">
+    <div class="mtop">
+      <div id="mr-titulo" class="mtit"></div>
+      <button class="mx" onclick="fecharModal('modal-registo')" aria-label="Fechar">&times;</button>
+    </div>
+    <div id="mr-corpo"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

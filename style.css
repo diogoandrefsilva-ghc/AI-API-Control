@@ -1,0 +1,279 @@
+/* ═══════════════════════════════════════════════════════════════════
+   AI API Control — todo o CSS
+   ═══════════════════════════════════════════════════════════════════
+   A COR É INFORMAÇÃO, NÃO DECORAÇÃO. É a regra das apps irmãs e aqui
+   ela tem de ser ainda mais apertada, porque um painel de números
+   ilegível é pior do que não haver painel nenhum:
+
+     grafite  (--ink)  = a app, e o euro MEDIDO — a afirmação firme;
+     cinzento (--mu)   = o euro ESTIMADO — um palpite não se veste de
+                         facto, e é essa a diferença que este painel
+                         existe para mostrar;
+     âmbar    (--wn)   = provisório / por calibrar — não é erro, é "não
+                         sei ainda";
+     vermelho (--er)   = erro a sério;
+     verde    (--ok)   = correu bem.
+
+   Não dês cor própria a mais nada. Sete famílias de cor lado a lado e
+   nenhuma quer dizer nada — foi a lição do cartão do vinho na
+   Garrafeira.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f4f5f7;
+  --card:#ffffff;
+  --ink:#1c2430;
+  --mu:#6b7785;
+  --ln:#e2e6ea;
+  --wn:#b45309;
+  --er:#b91c1c;
+  --ok:#15803d;
+  --sh:0 1px 2px rgba(28,36,48,.06), 0 4px 12px rgba(28,36,48,.05);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+/* ── Splash ── */
+#splash{
+  position:fixed;inset:0;z-index:900;background:var(--ink);color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  transition:opacity .25s ease;
+}
+#splash.off{opacity:0;pointer-events:none}
+.sp-mark{
+  width:64px;height:64px;border-radius:16px;border:2px solid rgba(255,255,255,.35);
+  display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:600;
+}
+.sp-txt{font-size:13px;letter-spacing:.16em;text-transform:uppercase;opacity:.7}
+
+/* ── Autenticação ── */
+.auth{
+  position:fixed;inset:0;z-index:800;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;
+}
+.auth-box{
+  width:100%;max-width:360px;background:var(--card);border:1px solid var(--ln);
+  border-radius:16px;box-shadow:var(--sh);padding:24px;
+}
+.auth-box h1{margin:0 0 4px;font-size:20px}
+.auth-sub{margin:0 0 16px;color:var(--mu);font-size:13px}
+.auth-box input{width:100%;margin-bottom:10px}
+.auth-links{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
+.auth-status{margin-top:12px;font-size:13px;color:var(--mu)}
+
+/* ── Campos ──
+   `appearance:none` num input apaga o desenho nativo da CHECKBOX, que
+   depois muda de estado sem mudar de aspeto. Aqui não há checkboxes
+   nenhumas; se acrescentares uma, dá-lhe `appearance:checkbox` e desfaz
+   o padding/borda herdados. É a armadilha do SplitBill. */
+input[type=text],input[type=email],input[type=password],input[type=number],
+input[type=datetime-local],select{
+  width:100%;padding:10px 12px;border:1px solid var(--ln);border-radius:10px;
+  background:#fff;color:var(--ink);font:inherit;min-width:0;
+  -webkit-appearance:none;appearance:none;
+}
+input[type=datetime-local]{-webkit-appearance:none}
+select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7785'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:30px;
+}
+input:focus,select:focus{outline:none;border-color:var(--ink)}
+label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-bottom:5px}
+
+/* ── Botões ──
+   Um `button:hover` global ganha em especificidade a qualquer classe que
+   venhas a definir, e no telemóvel o `:hover` fica colado depois do
+   toque. Por isso NÃO há regra global de botão nesta folha: cada classe
+   pinta-se a si própria e o estado desativado leva `pointer-events:none`,
+   que é o que tira o `:hover`, o `:active` e o realce de toque de uma vez.
+   Lição das apps irmãs, e custou lá um botão verde com texto ilegível. */
+.pri,.sec,.lnk,.seg,.mx,.hd-rec,.it,.mini{
+  font:inherit;cursor:pointer;border-radius:10px;border:1px solid transparent;
+  -webkit-tap-highlight-color:transparent;
+}
+.pri{width:100%;padding:11px 14px;background:var(--ink);color:#fff;font-weight:600;margin-top:4px}
+.sec{width:100%;padding:11px 14px;background:#fff;color:var(--ink);border-color:var(--ln);margin-top:8px}
+.lnk{background:none;border:none;color:var(--mu);font-size:13px;padding:4px;text-decoration:underline}
+.mini{padding:6px 10px;background:#fff;border-color:var(--ln);color:var(--ink);font-size:13px}
+.pri:disabled,.sec:disabled,.mini:disabled{opacity:.45;pointer-events:none}
+
+/* ── Cabeçalho e separadores ── */
+body>#app-sec>header{
+  position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+}
+.hd-t{font-size:13px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+.hd-rec{background:none;border:none;color:#fff;font-size:19px;line-height:1;padding:4px 8px;opacity:.8}
+
+.itabs{
+  position:sticky;top:0;z-index:30;display:flex;gap:4px;padding:8px 12px;
+  background:var(--bg);border-bottom:1px solid var(--ln);overflow-x:auto;
+}
+.it{
+  flex:0 0 auto;padding:7px 14px;background:transparent;color:var(--mu);
+  font-size:13px;font-weight:600;border-radius:999px;
+}
+.it.on{background:var(--ink);color:#fff}
+
+.tp{display:none;padding:14px 12px 40px;max-width:820px;margin:0 auto}
+.tp.on{display:block}
+
+/* ── Cartões ── */
+.card{
+  background:var(--card);border:1px solid var(--ln);border-radius:14px;
+  box-shadow:var(--sh);padding:16px;margin-bottom:12px;
+}
+.card h2{margin:0 0 6px;font-size:15px}
+.nota{margin:0 0 12px;color:var(--mu);font-size:12.5px;line-height:1.55}
+.nota:last-child{margin-bottom:0}
+code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;border-radius:5px}
+
+/* ── Números ──
+   `tabular-nums` é obrigatório em qualquer coluna de valores: sem isso as
+   vírgulas não alinham de linha para linha e a coluna deixa de se ler de
+   relance, que é a única coisa que uma coluna de números tem de fazer. */
+.num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+/* O euro MEDIDO e o euro ESTIMADO não se podem parecer. */
+.eur-med{font-weight:700;color:var(--ink)}
+.eur-est{color:var(--mu);font-weight:400}
+.eur-nd{color:var(--mu)}          /* não calibrado: não há número a dar */
+
+/* ── O bloco de topo do Resumo ── */
+.topo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tbox{
+  background:var(--card);border:1px solid var(--ln);border-radius:14px;
+  box-shadow:var(--sh);padding:14px 16px;
+}
+.tbox .tl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.tbox .tv{font-size:26px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.tbox .ts{font-size:12px;color:var(--mu);margin-top:2px}
+.tbox.alt .tv{font-size:20px;font-weight:600;color:var(--mu)}
+
+/* ── Avisos ──
+   Âmbar é "não sei ainda", vermelho é "está mal". Não os troques: um
+   painel por calibrar não é uma avaria. */
+.aviso{
+  border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.55;
+  border:1px solid;background:#fffaf2;border-color:#f0d9b5;color:#7c4a09;
+}
+.aviso.erro{background:#fef4f4;border-color:#f0c4c4;color:#8f1d1d}
+.aviso b{font-weight:700}
+.aviso .mini{margin-top:8px}
+
+/* ── Janela ── */
+.jan{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.jan-l{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.segs{display:flex;gap:4px;background:#fff;border:1px solid var(--ln);border-radius:999px;padding:3px}
+.seg{padding:5px 12px;background:transparent;color:var(--mu);font-size:12.5px;border-radius:999px}
+.seg.on{background:var(--ink);color:#fff}
+
+/* ── Tabelas ──
+   Rolam de lado dentro do cartão, nunca fazem a PÁGINA rolar de lado: num
+   telemóvel, uma tabela que empurra a página estraga o scroll vertical
+   todo. E as colunas de número levam `white-space:nowrap`, senão um
+   "1 234" parte-se em duas linhas e a coluna muda de altura. */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px}
+/* `min-width:max-content` é o que faz a tabela ROLAR dentro do `.tw` em
+   vez de se espremer: sem isso o browser encolhe a primeira coluna até o
+   nome do modelo se partir em quatro linhas ("gemini-/flash-/lite-/latest")
+   e a coluna do euro ficar cortada. A tabela leva a largura que precisa e
+   quem lê arrasta. */
+table{border-collapse:collapse;width:100%;min-width:max-content;font-size:13px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--ln);vertical-align:top}
+th{
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);
+  font-weight:600;white-space:nowrap;
+}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+tr:last-child td{border-bottom:none}
+.t-app{font-weight:600;white-space:nowrap}
+.t-sub{display:block;color:var(--mu);font-size:11.5px;font-family:inherit}
+
+/* ── Lista de registos ──
+   Cada linha é um BOTÃO, e um botão herda o alinhamento e o peso do que
+   estiver definido para botões. Aqui não há regra global, mas repõe-se à
+   mesma o `text-align` e o `text-transform` — é o descuido que nas apps
+   irmãs pôs nomes de artigos em MAIÚSCULAS a meio de uma lista. */
+.rlin{
+  display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;
+  text-transform:none;letter-spacing:normal;font:inherit;cursor:pointer;
+  background:var(--card);border:1px solid var(--ln);border-left-width:3px;
+  border-radius:10px;padding:10px 12px;margin-bottom:6px;
+  -webkit-tap-highlight-color:transparent;
+}
+.rlin.ok{border-left-color:var(--ok)}
+.rlin.erro{border-left-color:var(--er)}
+.rlin.vazio{border-left-color:var(--wn)}
+.rlin.pedido{border-left-color:var(--ln)}
+.rlin-m{flex:1 1 auto;min-width:0}
+.rlin-t{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rlin-s{color:var(--mu);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rlin-v{flex:0 0 auto;text-align:right}
+.rlin-e{font-size:13.5px;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.rlin-d{font-size:11px;color:var(--mu)}
+
+/* Pastilhas: uma palavra, e só quando acrescentam. */
+.tag{
+  display:inline-block;font-size:10.5px;line-height:1.7;padding:0 7px;border-radius:999px;
+  border:1px solid var(--ln);color:var(--mu);background:#fff;margin-left:6px;white-space:nowrap;
+}
+.tag.wn{border-color:#f0d9b5;background:#fffaf2;color:var(--wn)}
+.tag.er{border-color:#f0c4c4;background:#fef4f4;color:var(--er)}
+.tag.ok{border-color:#c9e4d2;background:#f4fbf6;color:var(--ok)}
+
+/* ── Filtros ── */
+.filtros{display:flex;gap:10px;flex-wrap:wrap}
+.fl{flex:1 1 140px;min-width:0}
+.fl-w{flex:1 1 100%}
+.fgrid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+
+/* ── Modal ──
+   No telemóvel sobe de baixo e é a `.mbox` que rola, não a página por
+   trás. Mesmo desenho das apps irmãs. */
+.modal{
+  position:fixed;inset:0;z-index:600;background:rgba(28,36,48,.45);
+  display:none;align-items:center;justify-content:center;padding:16px;
+}
+.modal.on{display:flex}
+.mbox{
+  width:100%;max-width:640px;max-height:88vh;overflow:auto;
+  background:var(--card);border-radius:16px;box-shadow:0 12px 40px rgba(28,36,48,.25);padding:16px;
+}
+.mtop{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.mtit{flex:1 1 auto;font-weight:700;font-size:15px}
+.mx{background:none;border:none;font-size:24px;line-height:1;color:var(--mu);padding:0 4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin-bottom:12px}
+.kv dt{color:var(--mu);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.kv dd{margin:0;font-variant-numeric:tabular-nums}
+pre.raw{
+  background:#f7f8fa;border:1px solid var(--ln);border-radius:10px;padding:12px;
+  font-family:var(--mono);font-size:11.5px;line-height:1.5;overflow:auto;margin:0;
+  white-space:pre-wrap;word-break:break-word;
+}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));
+  transform:translate(-50%,16px);z-index:900;
+  background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:88vw;text-align:center;
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.erro{background:var(--er)}
+
+.vazio-msg{color:var(--mu);font-size:13px;padding:16px 4px;text-align:center}
+
+@media(max-width:560px){
+  .topo{grid-template-columns:1fr}
+  .modal{padding:0;align-items:flex-end}
+  .mbox{max-width:none;border-radius:16px 16px 0 0;max-height:92vh;
+        padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+}
