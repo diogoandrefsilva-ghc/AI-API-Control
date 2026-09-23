@@ -3,7 +3,7 @@
    browser o index.html novo com o app.js VELHO da cache — botões novos a
    chamar funções que ainda não existem, sem erro visível. Já aconteceu no
    Goals, e está escrito no CLAUDE.md de todas as apps irmãs. */
-const CACHE_NAME = 'aic-cache-v1';
+const CACHE_NAME = 'aic-cache-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 

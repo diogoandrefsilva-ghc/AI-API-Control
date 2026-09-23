@@ -1,7 +1,7 @@
 # tests
 
 `node tests/ecras.js` — conduz os quatro ecrãs num Chromium a sério, com a
-camada de RPC substituída por dados reais da base. Verifica 34 coisas: o
+camada de RPC substituída por dados reais da base. Verifica 36 coisas: o
 splash esconde-se, o euro medido aparece a "—" sem calibração e com número
 depois dela, o 200 vazio é marcado a âmbar mesmo quando o estado é `erro`,
 o filtro corta o que deve, a ficha explica o 200 vazio e traz o `detalhe`

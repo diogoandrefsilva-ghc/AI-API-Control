@@ -17,9 +17,14 @@ quem herdasse essa app o poder sobre a tabela que mede as outras.
 |---|---|---|
 | 1 | `ia_uso.sql` | o registo: `config`, `registos`, `sou_admin()`, `listar()`, `resumo()` |
 | 2 | `calibracao.sql` | o euro medido: `leituras`, `precos`, `fatores()`, `calc()`, `janelas()`, `custos()`, `resumo_medido()` |
+| 3 | `poupanca.sql` | o que o catálogo de vinhos poupou: `poupanca_catalogo()` |
 
-Os dois são **idempotentes** — correm as vezes que forem precisas. O 2
-depende do 1 (usa a `registos`, a `config` e a `sou_admin()`).
+Os três são **idempotentes** — correm as vezes que forem precisas. O 2
+depende do 1 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
+do 1 e da vista `winecatalog.consumo`, que é da WineCatalog
+(`WineCatalog/db/catalogo.sql`) — é a única coisa deste painel que não sai
+da `registos`, porque um pedido servido pelo catálogo não chamou o Gemini e
+por isso não deixou linha aqui.
 
 ## Passos manuais no painel do Supabase
 
