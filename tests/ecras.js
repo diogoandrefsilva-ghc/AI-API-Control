@@ -78,6 +78,20 @@ const LEITURAS = [
   {id:2,lido_em:'2026-09-22T09:00:00Z',tipo:'saldo',valor_eur:49.81,carregado_eur:0,nota:null},
   {id:1,lido_em:'2026-09-20T13:00:00Z',tipo:'saldo',valor_eur:50.0,carregado_eur:0,nota:'primeira leitura a sério'}
 ];
+// O que o catálogo de vinhos poupou (db/poupanca.sql) — cada ação na sua
+// unidade, porque campos, notas e vinhos não se somam.
+const POUPANCA = {
+  desde: '2026-08-24T00:00:00Z',
+  total: { pedidos: 260, pedidosCatalogo: 3, poupadoEstimado: 0.0123 },
+  porAcao: [
+    {app:'garrafeira',acao:'vinho-info',unidade:'campos',pedidos:240,pedidosCatalogo:3,
+     itensCatalogo:412,itensIA:1880,poupadoEstimado:0.0123},
+    {app:'wineselection',acao:'sugerir_vinho',unidade:'notas',pedidos:18,pedidosCatalogo:0,
+     itensCatalogo:9,itensIA:61,poupadoEstimado:0},
+    {app:'wineselection',acao:'verificar_vinhos',unidade:'vinhos',pedidos:2,pedidosCatalogo:0,
+     itensCatalogo:1,itensIA:7,poupadoEstimado:0}
+  ]
+};
 
 (async () => {
   await new Promise(r => srv.listen(8099, r));
@@ -100,7 +114,8 @@ const LEITURAS = [
   await page.route('**/rest/v1/rpc/*', r => {
     const fn = r.request().url().split('/rpc/')[1].split('?')[0];
     const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), custos: REGISTOS,
-                   janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS };
+                   janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS,
+                   poupanca_catalogo: POUPANCA };
     if (!(fn in mapa)) return r.fulfill({ status: 404, body: '{"message":"fn desconhecida: ' + fn + '"}' });
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mapa[fn]) });
   });
@@ -128,6 +143,9 @@ const LEITURAS = [
   ok('estimativa visível', (await page.locator('#rs-topo .tbox.alt .tv').innerText()).includes('0,04'));
   ok('tabela por app com 2 linhas', await page.locator('#rs-apps tbody tr').count() === 2);
   ok('marca "vazio" no modelo sem saída', await page.locator('#rs-modelos .tag.wn').count() >= 1);
+  ok('catálogo: 3 ações, cada uma na sua unidade', await page.locator('#rs-catalogo tbody tr').count() === 3
+     && (await page.locator('#rs-catalogo tbody').innerText()).includes('notas'));
+  ok('catálogo: poupança dita como estimativa', (await page.locator('#rs-catalogo').innerText()).includes('estimativa em cima de uma estimativa'));
   await page.screenshot({ path: '/tmp/aic-1-resumo-porcalibrar.png', fullPage: true });
 
   // Resumo calibrado

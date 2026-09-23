@@ -95,7 +95,7 @@ async function iaRpc(fn,args){
     /* A migração por correr é o erro mais provável no primeiro dia, e o
        "404 schema cache" não o diz a ninguém. */
     if(/does not exist|schema cache|PGRST202|PGRST106/i.test(m))
-      m='Falta correr db/ia_uso.sql e db/calibracao.sql no Supabase, ou expor o schema ia_uso na API (ver db/README.md).';
+      m='Falta correr db/ia_uso.sql, db/calibracao.sql e db/poupanca.sql no Supabase, ou expor o schema ia_uso na API (ver db/README.md).';
     throw new Error(m);
   }
   return tx?JSON.parse(tx):null;
@@ -269,6 +269,56 @@ async function rsCarregar(){
     return;
   }
   rsDesenhar();
+  rsCarregarCatalogo();
+}
+
+/* ── O que o catálogo de vinhos poupou ──
+   À parte do resto, e de propósito: é a única coisa deste painel que não
+   sai da `registos` (um pedido servido pelo catálogo não chamou o Gemini,
+   não deixou linha aqui — ver `db/poupanca.sql`). Se a vista da
+   WineCatalog falhar, falha este cartão e mais nenhum. */
+async function rsCarregarCatalogo(){
+  const box=document.getElementById('rs-catalogo');
+  let d;
+  try{
+    d=await iaRpc('poupanca_catalogo',{p_dias:RS_DIAS});
+  }catch(e){
+    box.innerHTML='<div class="card"><h2>Catálogo de vinhos</h2>'
+      + '<div class="aviso erro">'+esc(e.message)+'</div></div>';
+    return;
+  }
+  const t=(d&&d.total)||{};
+  const pedidos=Number(t.pedidos||0),doCat=Number(t.pedidosCatalogo||0);
+  const pa=Array.isArray(d&&d.porAcao)?d.porAcao:[];
+  /* As unidades não se somam: campos, notas e vinhos são coisas
+     diferentes. Cada linha leva a sua; o que se soma é o PEDIDO. */
+  let h='<div class="card"><h2>Catálogo de vinhos</h2>'
+    + '<p class="nota">O que as apps de vinhos <b>não</b> foram perguntar ao Gemini '
+    + 'porque o catálogo partilhado já sabia. Nos últimos '+RS_DIAS+' dias: '
+    + '<b>'+nFmt(doCat)+'</b> de '+nFmt(pedidos)+' pedidos'
+    + (pedidos?' ('+Math.round(doCat*100/pedidos)+'%)':'')+' servidos sem IA nenhuma, '
+    + '≈ <span class="eur-est">'+esc(eurFmt(t.poupadoEstimado,2))+'</span> poupados.</p>'
+    + '<div class="tw"><table><thead><tr><th>Ação</th>'
+    + '<th class="n">Poupado</th><th class="n">Pedidos</th><th class="n">Só catálogo</th>'
+    + '<th class="n">Do catálogo</th><th class="n">Da IA</th></tr></thead><tbody>';
+  if(!pa.length)h+='<tr><td colspan="6" class="t-sub">Sem pedidos nesta janela.</td></tr>';
+  for(let i=0;i<pa.length;i++){
+    const a=pa[i];
+    h+='<tr><td class="t-app">'+esc(a.acao)+'<span class="t-sub">'+esc(a.app)+'</span></td>'
+      + '<td class="n eur-est">'+esc(eurFmt(a.poupadoEstimado,2))+'</td>'
+      + '<td class="n">'+nFmt(a.pedidos)+'</td>'
+      + '<td class="n">'+nFmt(a.pedidosCatalogo)+'</td>'
+      + '<td class="n">'+nFmt(a.itensCatalogo)+' <span class="t-sub" style="display:inline">'+esc(a.unidade)+'</span></td>'
+      + '<td class="n">'+nFmt(a.itensIA)+' <span class="t-sub" style="display:inline">'+esc(a.unidade)+'</span></td></tr>';
+  }
+  h+='</tbody></table></div>'
+    + '<p class="nota" style="padding:0 4px">A <b>contagem de pedidos é facto</b>. '
+    + 'O euro poupado é uma <b>estimativa em cima de uma estimativa</b>: um pedido '
+    + 'que não foi à IA não deixou registo do que teria custado, e conta-se ao '
+    + 'custo <em>estimado</em> médio dos que foram — não ao euro medido. '
+    + '"Do catálogo" e "Da IA" contam na unidade de cada ação (campos, notas, '
+    + 'vinhos) e não se somam entre linhas.</p></div>';
+  box.innerHTML=h;
 }
 
 function rsDesenhar(){
