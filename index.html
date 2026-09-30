@@ -2,7 +2,10 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Sem zoom: é uma app, não uma página. O iOS ignora o `user-scalable=no`
+     no Safari, e por isso o `app.js` ainda trava o gesto à mão (INIT) e os
+     campos levam 16px — abaixo disso o iOS dá zoom sozinho ao tocar num. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1c2430">
 <title>AI API Control</title>
 <link rel="manifest" href="manifest.json">
@@ -131,21 +134,28 @@
       <p class="nota">O que o painel da Google diz agora. Entre esta leitura
         e a anterior há um euro observado — e é ele que reparte o custo pelas
         chamadas que caíram no meio.</p>
+      <div id="lt-ultima"></div>
+      <!-- O feitio é um par de botões e não um <select>: no telemóvel o
+           select cortava o texto a meio ("Saldo que resta (des…"). O valor
+           vive no campo escondido, que é o que o `ltSync()` lê. -->
+      <div class="segs segs-w" id="lt-tipo-segs">
+        <button class="seg on" data-v="saldo" onclick="ltTipo('saldo')">Saldo que resta</button>
+        <button class="seg" data-v="gasto" onclick="ltTipo('gasto')">Gasto acumulado</button>
+      </div>
+      <input id="lt-tipo" type="hidden" value="saldo">
+      <label for="lt-valor">Valor na conta</label>
+      <div class="eur-in">
+        <input id="lt-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
+        <span>€</span>
+      </div>
+      <p class="nota" id="lt-dica"></p>
       <div class="fgrid">
-        <div class="fl">
-          <label for="lt-tipo">O que estás a ler</label>
-          <select id="lt-tipo" onchange="ltSync()">
-            <option value="saldo">Saldo que resta (desce)</option>
-            <option value="gasto">Gasto acumulado (sobe)</option>
-          </select>
-        </div>
-        <div class="fl">
-          <label for="lt-valor">Valor (€)</label>
-          <input id="lt-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
-        </div>
         <div class="fl" id="lt-carr-box">
-          <label for="lt-carregado">Carregado desde a última (€)</label>
-          <input id="lt-carregado" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
+          <label for="lt-carregado">Carregado desde a última</label>
+          <div class="eur-in pq">
+            <input id="lt-carregado" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
+            <span>€</span>
+          </div>
         </div>
         <div class="fl">
           <label for="lt-quando">Quando</label>
@@ -156,7 +166,6 @@
           <input id="lt-nota" type="text" maxlength="120" placeholder="ex.: carreguei 20 € a 12/set">
         </div>
       </div>
-      <p class="nota" id="lt-dica"></p>
       <button class="pri" onclick="ltGuardar()">Registar leitura</button>
     </div>
     <div id="lt-janelas"></div>

@@ -32,6 +32,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+/* Sem zoom de duplo toque (o pinch trava-o o `app.js`). O `manipulation`
+   deixa o scroll e tira só o zoom — e com ele o atraso de 300 ms no toque. */
+html{touch-action:manipulation}
 body{
   background:var(--bg);color:var(--ink);
   font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -74,16 +77,22 @@ body{
    o padding/borda herdados. É a armadilha do SplitBill. */
 input[type=text],input[type=email],input[type=password],input[type=number],
 input[type=datetime-local],select{
-  width:100%;padding:10px 12px;border:1px solid var(--ln);border-radius:10px;
-  background:#fff;color:var(--ink);font:inherit;min-width:0;
+  width:100%;padding:11px 12px;border:1px solid var(--ln);border-radius:12px;
+  background:#fbfbfc;color:var(--ink);font:inherit;min-width:0;
+  /* 16px e não os 15 do corpo: abaixo de 16 o iOS dá zoom à página
+     sozinho quando se toca no campo, e não o desfaz depois. */
+  font-size:16px;min-height:46px;
   -webkit-appearance:none;appearance:none;
 }
-input[type=datetime-local]{-webkit-appearance:none}
+/* O iOS centra a data e encolhe a caixa quando está vazia. */
+input[type=datetime-local]{-webkit-appearance:none;text-align:left}
+input[type=datetime-local]::-webkit-date-and-time-value{text-align:left}
 select{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7785'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;padding-right:30px;
 }
-input:focus,select:focus{outline:none;border-color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--ink);background:#fff;
+  box-shadow:0 0 0 3px rgba(28,36,48,.08)}
 label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-bottom:5px}
 
 /* ── Botões ──
@@ -100,7 +109,7 @@ label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase
 .pri{width:100%;padding:11px 14px;background:var(--ink);color:#fff;font-weight:600;margin-top:4px}
 .sec{width:100%;padding:11px 14px;background:#fff;color:var(--ink);border-color:var(--ln);margin-top:8px}
 .lnk{background:none;border:none;color:var(--mu);font-size:13px;padding:4px;text-decoration:underline}
-.mini{padding:6px 10px;background:#fff;border-color:var(--ln);color:var(--ink);font-size:13px}
+.mini{padding:6px 10px;background:#fff;border-color:var(--ln);color:var(--ink);font-size:13px;flex:0 0 auto}
 .pri:disabled,.sec:disabled,.mini:disabled{opacity:.45;pointer-events:none}
 
 /* ── Cabeçalho e separadores ── */
@@ -112,13 +121,15 @@ body>#app-sec>header{
 .hd-t{font-size:13px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
 .hd-rec{background:none;border:none;color:#fff;font-size:19px;line-height:1;padding:4px 8px;opacity:.8}
 
+/* Os quatro do mesmo tamanho: cada um com a largura da sua palavra, a
+   fila ficava torta e o "Definições" encostado à borda. */
 .itabs{
   position:sticky;top:0;z-index:30;display:flex;gap:4px;padding:8px 12px;
   background:var(--bg);border-bottom:1px solid var(--ln);overflow-x:auto;
 }
 .it{
-  flex:0 0 auto;padding:7px 14px;background:transparent;color:var(--mu);
-  font-size:13px;font-weight:600;border-radius:999px;
+  flex:1 1 0;padding:8px 6px;background:transparent;color:var(--mu);
+  font-size:13px;font-weight:600;border-radius:999px;white-space:nowrap;
 }
 .it.on{background:var(--ink);color:#fff}
 
@@ -127,10 +138,10 @@ body>#app-sec>header{
 
 /* ── Cartões ── */
 .card{
-  background:var(--card);border:1px solid var(--ln);border-radius:14px;
-  box-shadow:var(--sh);padding:16px;margin-bottom:12px;
+  background:var(--card);border:1px solid var(--ln);border-radius:16px;
+  box-shadow:var(--sh);padding:18px 16px;margin-bottom:12px;
 }
-.card h2{margin:0 0 6px;font-size:15px}
+.card h2{margin:0 0 6px;font-size:16px;letter-spacing:-.01em}
 .nota{margin:0 0 12px;color:var(--mu);font-size:12.5px;line-height:1.55}
 .nota:last-child{margin-bottom:0}
 code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;border-radius:5px}
@@ -138,8 +149,10 @@ code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;
 /* ── Números ──
    `tabular-nums` é obrigatório em qualquer coluna de valores: sem isso as
    vírgulas não alinham de linha para linha e a coluna deixa de se ler de
-   relance, que é a única coisa que uma coluna de números tem de fazer. */
-.num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+   relance, que é a única coisa que uma coluna de números tem de fazer.
+   E é o `tabular-nums` que alinha, não a letra MONO: em mono o painel
+   parecia uma máquina de escrever, e a mono fica para o código. */
+.num{font-variant-numeric:tabular-nums}
 
 /* O euro MEDIDO e o euro ESTIMADO não se podem parecer. */
 .eur-med{font-weight:700;color:var(--ink)}
@@ -147,7 +160,7 @@ code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;
 .eur-nd{color:var(--mu)}          /* não calibrado: não há número a dar */
 
 /* ── O bloco de topo do Resumo ── */
-.topo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.topo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .tbox{
   background:var(--card);border:1px solid var(--ln);border-radius:14px;
   box-shadow:var(--sh);padding:14px 16px;
@@ -192,7 +205,7 @@ th{
   font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);
   font-weight:600;white-space:nowrap;
 }
-td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 tr:last-child td{border-bottom:none}
 .t-app{font-weight:600;white-space:nowrap}
 .t-sub{display:block;color:var(--mu);font-size:11.5px;font-family:inherit}
@@ -217,7 +230,7 @@ tr:last-child td{border-bottom:none}
 .rlin-t{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rlin-s{color:var(--mu);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rlin-v{flex:0 0 auto;text-align:right}
-.rlin-e{font-size:13.5px;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.rlin-e{font-size:13.5px;font-variant-numeric:tabular-nums}
 .rlin-d{font-size:11px;color:var(--mu)}
 
 /* Pastilhas: uma palavra, e só quando acrescentam. */
@@ -231,9 +244,43 @@ tr:last-child td{border-bottom:none}
 
 /* ── Filtros ── */
 .filtros{display:flex;gap:10px;flex-wrap:wrap}
+.filtros .fl{flex-basis:90px}
 .fl{flex:1 1 140px;min-width:0}
 .fl-w{flex:1 1 100%}
-.fgrid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.fgrid{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+
+/* ── O ecrã do saldo ── */
+/* O "Carregado" e o "Quando" não cabem lado a lado num telemóvel: a
+   data cortava a meio da hora. Cada um na sua linha, abaixo de 440px. */
+#t-saldo .fgrid .fl{flex-basis:200px}
+.segs-w{display:flex;margin-bottom:16px}
+.segs-w .seg{flex:1 1 0;padding:8px 6px;font-size:13.5px;font-weight:600}
+/* O valor lido é o que se veio escrever: grande, com o € colado. */
+.eur-in{position:relative}
+.eur-in input{padding-right:34px}
+.eur-in>span{position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  color:var(--mu);pointer-events:none}
+.eur-in:not(.pq) input{font-size:26px;font-weight:700;min-height:58px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.eur-in:not(.pq)>span{font-size:20px}
+.eur-in:not(.pq)+.nota{margin-top:8px}
+.lt-ult{font-size:13px;color:var(--ink);background:var(--bg);border-radius:10px;
+  padding:9px 12px;margin-bottom:14px}
+.t-mu{color:var(--mu)}
+
+/* ── Listas (janelas, leituras) ──
+   Linhas e não tabela: com a hora nas duas pontas de uma janela a tabela
+   não cabia no telemóvel, e o euro ia parar atrás do scroll lateral. */
+.lst{margin:0 -4px}
+.li{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--ln)}
+.li:last-child{border-bottom:none}
+.li-m{flex:1 1 auto;min-width:0}
+.li-t{font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
+.li-t .tag{vertical-align:1px}
+.li-s{color:var(--mu);font-size:12px;margin-top:2px;font-variant-numeric:tabular-nums}
+.li-v{flex:0 0 auto;text-align:right;font-size:15px;font-weight:600;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.li-er .li-v,.li-wn .li-v{color:var(--mu);font-weight:400}
 
 /* ── Modal ──
    No telemóvel sobe de baixo e é a `.mbox` que rola, não a página por
