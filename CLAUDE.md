@@ -65,6 +65,17 @@ milésimos de euro, e arredondá-la punha metade a zero.
   que gastou. O total da janela fica certo; a repartição dentro dela mente,
   e mente sempre no mesmo sentido.
 
+**O atraso da Google junta janelas** (`ia_uso.fatores()`). O saldo só
+mostra uma chamada algum tempo depois, e com leituras várias vezes ao dia
+isso dá uma janela COM chamadas a 0,00 € seguida de uma SEM chamadas com
+euros. Por isso: uma janela sem chamadas junta-se à anterior, e a janela a
+seguir a chamadas ainda a 0,00 € junta-se a elas. O fator é do GRUPO
+(`leituras` diz quantas juntou) e a invariante vale para o grupo. Um grupo
+com chamadas e 0,00 € sem sucessor fica `pendente` e **sem fator** — não
+é "custou zero", é "a Google ainda não disse"; as chamadas vêm
+`provisorio`. Uma janela sem número (feitios diferentes, saldo que subiu)
+não se junta a nada.
+
 **Sem uma leitura, `custo_eur` é NULL e o painel diz que está a mostrar a
 estimativa.** NÃO se cai para o `custo_estimado_eur` às escondidas: um
 número medido e um número adivinhado não se somam na mesma coluna sem se
@@ -137,6 +148,16 @@ nenhuma quer dizer nada (a lição do cartão do vinho na Garrafeira).
   precisa e rola dentro do `.tw` — nunca faz a PÁGINA rolar de lado.
 - **O EURO É A PRIMEIRA COLUNA de números.** É um painel de custos: o
   número que se veio ver não pode estar atrás de um scroll lateral.
+- **Sem zoom.** `user-scalable=no` no viewport, o `gesturestart` travado
+  no `app.js` (o iOS ignora o viewport) e `touch-action:manipulation` no
+  `html`. E os campos a **16px**: abaixo disso o iOS dá zoom sozinho ao
+  tocar num. Nunca travar o duplo toque com `preventDefault` no
+  `touchend` — come o segundo toque rápido num botão.
+- **Números em `tabular-nums`, não em letra mono.** É o `tabular-nums` que
+  alinha; em mono o painel parecia uma máquina de escrever.
+- **As janelas levam a HORA** (`janFmt`). Lê-se o saldo várias vezes ao
+  dia, e só com a data eram todas "30/09 → 30/09". São uma lista e não uma
+  tabela, para o euro não ir para trás do scroll.
 - **`useGrouping:'always'`.** O defeito (`'auto'`) não agrupa números de
   quatro dígitos em pt-PT: a coluna ficava com `14 938` por cima de
   `4524`, com os milhares a mudar de sítio de linha para linha.

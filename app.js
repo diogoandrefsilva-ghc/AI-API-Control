@@ -208,6 +208,24 @@ function dataFmt(s){
   if(isNaN(d))return '—';
   return d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit',year:'2-digit'});
 }
+/* "30/09 14:02". As leituras fazem-se várias vezes ao dia, e só com a
+   data duas janelas do mesmo dia liam-se iguais ("30/09 → 30/09"). */
+function diaHoraFmt(s){
+  if(!s)return '—';
+  const d=new Date(s);
+  if(isNaN(d))return '—';
+  return d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'})+' '
+    + d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+}
+/* Uma janela: o dia só se repete do outro lado quando muda. */
+function janFmt(de,ate){
+  const a=new Date(de),b=new Date(ate);
+  if(isNaN(a)||isNaN(b))return diaHoraFmt(de)+' → '+diaHoraFmt(ate);
+  const mesmoDia=a.toDateString()===b.toDateString();
+  return diaHoraFmt(de)+' → '+(mesmoDia
+    ? b.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'})
+    : diaHoraFmt(ate));
+}
 /* "há 3 dias" — é isto que faz o sinal de vida ler-se de relance. */
 function desdeFmt(s){
   if(!s)return 'nunca';
@@ -537,6 +555,13 @@ function rgAbrir(i){
 /* ══════════════════════════════════════════════════════════════════
    SALDO — as leituras e a calibração
    ══════════════════════════════════════════════════════════════════ */
+function ltTipo(t){
+  document.getElementById('lt-tipo').value=t;
+  const bs=document.querySelectorAll('#lt-tipo-segs .seg');
+  for(let i=0;i<bs.length;i++)bs[i].classList.toggle('on',bs[i].dataset.v===t);
+  ltSync();
+}
+
 function ltSync(){
   const tipo=document.getElementById('lt-tipo').value;
   /* Um carregamento só faz sentido num SALDO que desce. Num gasto
@@ -569,7 +594,18 @@ async function ltCarregar(){
     jb.innerHTML='<div class="aviso erro">'+esc(e.message)+'</div>';return;
   }
 
+  /* ── A última leitura, para se saber com o que se está a comparar ── */
+  const ult=ls[0];
+  document.getElementById('lt-ultima').innerHTML=ult
+    ? '<div class="lt-ult">Última leitura: <b>'+esc(diaHoraFmt(ult.lido_em))+'</b> · '
+      + (ult.tipo==='saldo'?'saldo ':'gasto ')+'<b class="num">'+esc(eurFmt(ult.valor_eur,2))+'</b>'
+      + ' <span class="t-mu">('+esc(desdeFmt(ult.lido_em))+')</span></div>'
+    : '';
+
   /* ── As janelas ──
+     Uma LISTA e não uma tabela: com a hora nas duas pontas a tabela já não
+     cabia no telemóvel, e o euro — o número que se veio ver — ia parar
+     atrás de um scroll lateral. Aqui fica à direita, sempre à vista.
      O `desvio` é a única coisa que este painel pode dizer sobre a
      qualidade da própria conta: quanto é que a estimativa das functions
      andava longe do que se pagou mesmo. */
@@ -577,26 +613,36 @@ async function ltCarregar(){
     + '<p class="nota">Cada par de leituras seguidas é uma janela. O <b>fator</b> é '
     + 'o euro observado a dividir pela soma dos pesos das chamadas que lá caíram — '
     + 'e a soma dessas chamadas dá exactamente o euro da janela, por construção.</p>'
-    + '<div class="tw"><table><thead><tr><th>De → até</th><th class="n">Real</th>'
-    + '<th class="n">Chamadas</th><th class="n">Fator</th><th class="n">Estimado</th>'
-    + '<th class="n">Desvio</th></tr></thead><tbody>';
+    + '<p class="nota">A Google só mostra uma chamada no saldo algum tempo depois. Por isso '
+    + 'uma janela <b>sem chamadas</b> junta-se à anterior (o euro que lá apareceu é das '
+    + 'chamadas de trás), e chamadas que ainda estavam a 0,00 € juntam-se à janela seguinte.</p>';
   if(!js.length){
-    h+='<tr><td colspan="6" class="t-sub">Ainda não há duas leituras — é preciso um par '
-     + 'para haver janela.</td></tr>';
+    h+='<div class="vazio-msg">Ainda não há duas leituras — é preciso um par para haver janela.</div>';
   }
+  h+='<div class="lst">';
   for(let i=0;i<js.length;i++){
     const j=js[i];
     const mau=(j.real_eur==null)||(Number(j.real_eur)<0);
-    h+='<tr><td class="t-app">'+esc(dataFmt(j.de))+' → '+esc(dataFmt(j.ate))
-      + (j.nota?'<span class="t-sub">'+esc(j.nota)+'</span>':'')+'</td>'
-      + '<td class="n">'+(j.real_eur==null?'—':esc(eurFmt(j.real_eur,2)))
-      +   (mau?'<span class="tag er">?</span>':'')+'</td>'
-      + '<td class="n">'+nFmt(j.chamadas)+'</td>'
-      + '<td class="n">'+decFmt(j.fator,3)+'</td>'
-      + '<td class="n eur-est">'+esc(eurFmt(j.estimado_eur,2))+'</td>'
-      + '<td class="n">'+pctFmt(j.desvio)+'</td></tr>';
+    const pend=!!j.pendente;
+    const nj=Number(j.leituras||1);
+    let tags='';
+    if(nj>1)tags+='<span class="tag">'+nj+' leituras juntas</span>';
+    if(pend)tags+='<span class="tag wn">à espera da Google</span>';
+    if(mau)tags+='<span class="tag er">sem número</span>';
+    const sub=[nFmt(j.chamadas)+(Number(j.chamadas)===1?' chamada':' chamadas')];
+    if(j.fator!=null)sub.push('fator '+decFmt(j.fator,3));
+    sub.push('estimado <span class="eur-est">'+esc(eurFmt(j.estimado_eur,2))+'</span>');
+    /* Numa janela à espera da Google o desvio dava sempre -100%, que é
+       o atraso a falar e não a estimativa. */
+    if(j.desvio!=null&&!pend)sub.push('desvio '+pctFmt(j.desvio));
+    h+='<div class="li'+(mau?' li-er':pend?' li-wn':'')+'">'
+      + '<div class="li-m"><div class="li-t">'+esc(janFmt(j.de,j.ate))+tags+'</div>'
+      +   '<div class="li-s">'+sub.join(' · ')+'</div>'
+      +   (j.nota?'<div class="li-s">'+esc(j.nota)+'</div>':'')+'</div>'
+      + '<div class="li-v eur-med">'+(j.real_eur==null?'—':esc(eurFmt(j.real_eur,2)))+'</div>'
+      + '</div>';
   }
-  h+='</tbody></table></div>';
+  h+='</div>';
   const maus=js.filter(function(j){return j.real_eur==null||Number(j.real_eur)<0;});
   if(maus.length){
     h+='<div class="aviso">'
@@ -605,24 +651,30 @@ async function ltCarregar(){
      + 'subtraem), ou o saldo <b>subiu</b> sem carregamento declarado. '
      + (maus.length===1?'Essa não reparte':'Essas não repartem')+' custo nenhum.</div>';
   }
+  if(js.some(function(j){return j.pendente;})){
+    h+='<div class="aviso">Há chamadas que a Google <b>ainda não cobrou</b>: a janela delas '
+     + 'deu 0,00 €. Não quer dizer que não custaram nada — levam o fator mais próximo, '
+     + 'como <b>provisórias</b>, até uma leitura seguinte mostrar o euro.</div>';
+  }
   h+='</div>';
   jb.innerHTML=h;
 
   /* ── As leituras ── */
-  let hl='<div class="card"><h2>Leituras</h2><div class="tw"><table><thead><tr>'
-    + '<th>Quando</th><th>Tipo</th><th class="n">Valor</th><th class="n">Carregado</th>'
-    + '<th></th></tr></thead><tbody>';
-  if(!ls.length)hl+='<tr><td colspan="5" class="t-sub">Sem leituras.</td></tr>';
+  let hl='<div class="card"><h2>Leituras</h2><div class="lst">';
+  if(!ls.length)hl+='<div class="vazio-msg">Sem leituras.</div>';
   for(let i=0;i<ls.length;i++){
     const l=ls[i];
-    hl+='<tr><td class="t-app">'+esc(dtFmt(l.lido_em))
-      + (l.nota?'<span class="t-sub">'+esc(l.nota)+'</span>':'')+'</td>'
-      + '<td>'+(l.tipo==='saldo'?'saldo':'gasto')+'</td>'
-      + '<td class="n">'+esc(eurFmt(l.valor_eur,2))+'</td>'
-      + '<td class="n">'+(Number(l.carregado_eur||0)>0?esc(eurFmt(l.carregado_eur,2)):'—')+'</td>'
-      + '<td class="n"><button class="mini" onclick="ltApagar('+Number(l.id)+')">Apagar</button></td></tr>';
+    const carr=Number(l.carregado_eur||0)>0;
+    hl+='<div class="li">'
+      + '<div class="li-m"><div class="li-t">'+esc(diaHoraFmt(l.lido_em))+'</div>'
+      +   '<div class="li-s">'+(l.tipo==='saldo'?'saldo':'gasto')
+      +     (carr?' · carregados '+esc(eurFmt(l.carregado_eur,2)):'')
+      +     (l.nota?' · '+esc(l.nota):'')+'</div></div>'
+      + '<div class="li-v">'+esc(eurFmt(l.valor_eur,2))+'</div>'
+      + '<button class="mini" onclick="ltApagar('+Number(l.id)+')">Apagar</button>'
+      + '</div>';
   }
-  hl+='</tbody></table></div></div>';
+  hl+='</div></div>';
   lb.innerHTML=hl;
 }
 
@@ -981,6 +1033,13 @@ async function sbInit(){
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape')fecharModal('modal-registo');
 });
+
+/* Sem zoom. O `user-scalable=no` do viewport chega no Android, mas o
+   Safari do iOS ignora-o desde o iOS 10, e por isso o pinch trava-se
+   aqui no `gesturestart`. O duplo toque trava-o o `touch-action` do
+   `style.css` — NÃO com um `preventDefault` no `touchend`, que comia o
+   segundo toque rápido num botão. O scroll não passa por aqui. */
+document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){

@@ -209,16 +209,42 @@ $$;
 -- `real_eur` NEGATIVO também não dá fator — é sinal de que faltou
 -- declarar um carregamento, e inventar um fator negativo era espalhar
 -- custos negativos por chamadas que custaram dinheiro.
-CREATE OR REPLACE FUNCTION ia_uso.fatores()
+--
+-- O ATRASO DA GOOGLE. O saldo da Google só mostra uma chamada algum
+-- tempo depois de ela acontecer. Com leituras várias vezes ao dia isso
+-- dá dois desenhos falsos, sempre juntos: uma janela COM chamadas e
+-- 0,00 € (a Google ainda não as tinha cobrado), seguida de uma janela
+-- SEM chamadas e com euros (é quando as cobrou). Lida à letra, a
+-- primeira dizia que aquelas chamadas não custaram nada e a segunda não
+-- tinha a quem dar o euro. Por isso as janelas JUNTAM-SE:
+--   · uma janela SEM chamadas junta-se à anterior — o euro que lá
+--     apareceu é das chamadas de trás;
+--   · uma janela a seguir a chamadas ainda a 0,00 € junta-se a elas — o
+--     euro que vier é delas também.
+-- O que sai é um GRUPO (`leituras` diz quantas janelas juntou), e é o
+-- grupo que tem fator. A invariante continua: a soma das chamadas do
+-- grupo dá exactamente o euro do grupo. Uma janela sem número a sério
+-- (feitios diferentes, saldo que subiu) não se junta a nada nem deixa
+-- nada juntar-se a ela.
+--   Um grupo com chamadas e 0,00 € que ainda não teve sucessor fica
+-- `pendente` e SEM fator: não é "custou zero", é "a Google ainda não
+-- disse". As chamadas dele levam o fator mais próximo e vêm `provisorio`.
+--
+-- O DROP é porque a forma do resultado mudou (`leituras`, `pendente`), e
+-- isso o CREATE OR REPLACE não faz. Nada guarda dependência dela — a
+-- `calc()` e as DEFINER chamam-na pelo nome — e os GRANTs voltam no fim.
+DROP FUNCTION IF EXISTS ia_uso.fatores();
+CREATE FUNCTION ia_uso.fatores()
 RETURNS TABLE (
   leitura_id bigint, de timestamptz, ate timestamptz, tipo text,
   real_eur numeric, chamadas bigint, peso_total numeric,
-  estimado_eur numeric, fator numeric, nota text
+  estimado_eur numeric, fator numeric, nota text,
+  leituras integer, pendente boolean
 )
 LANGUAGE sql STABLE
 SET search_path TO 'ia_uso', 'public'
 AS $$
-  WITH pares AS (
+  WITH RECURSIVE pares AS (
     SELECT l.id, l.tipo, l.valor_eur, l.carregado_eur, l.lido_em, l.nota,
            lag(l.lido_em)   OVER w AS de,
            lag(l.valor_eur) OVER w AS val_ant,
@@ -237,20 +263,60 @@ AS $$
       END AS real_eur
       FROM pares p
      WHERE p.de IS NOT NULL
+  ), a AS (
+    SELECT j.*, s.chamadas, s.peso_total, s.estimado_eur,
+           (j.real_eur IS NULL OR j.real_eur < 0) AS invalida,
+           row_number() OVER (ORDER BY j.ate) AS n
+      FROM j
+      CROSS JOIN LATERAL (
+        SELECT count(*) AS chamadas,
+               COALESCE(sum(ia_uso.peso(r)), 0) AS peso_total,
+               COALESCE(sum(r.custo_estimado_eur), 0) AS estimado_eur
+          FROM ia_uso.registos r
+         WHERE r.criado_em > j.de AND r.criado_em <= j.ate
+      ) s
+  ), g AS (
+    -- Janela a janela, pela ordem, a decidir se abre grupo novo. Tem de
+    -- ser recursivo: "as de trás ainda estão a 0,00 €" é o estado do
+    -- GRUPO até aqui, não da janela imediatamente anterior.
+    SELECT a.n, 1::bigint AS grupo, a.real_eur AS acum,
+           a.peso_total > 0 AS com_chamadas, a.invalida
+      FROM a WHERE a.n = 1
+    UNION ALL
+    SELECT a.n,
+           g.grupo + CASE WHEN x.junta THEN 0 ELSE 1 END,
+           CASE WHEN x.junta THEN g.acum + a.real_eur ELSE a.real_eur END,
+           (x.junta AND g.com_chamadas) OR a.peso_total > 0,
+           a.invalida
+      FROM g JOIN a ON a.n = g.n + 1
+      CROSS JOIN LATERAL (
+        SELECT NOT g.invalida AND NOT a.invalida
+               AND (a.peso_total = 0 OR (g.com_chamadas AND g.acum = 0)) AS junta
+      ) x
+  ), gr AS (
+    SELECT g.grupo,
+           (array_agg(a.id ORDER BY a.ate DESC))[1] AS leitura_id,
+           min(a.de) AS de, max(a.ate) AS ate, min(a.tipo) AS tipo,
+           -- Um grupo inválido é sempre de UMA janela, por isso a soma não
+           -- esconde um NULL no meio de números.
+           sum(a.real_eur) AS real_eur,
+           sum(a.chamadas)::bigint AS chamadas, sum(a.peso_total) AS peso_total,
+           sum(a.estimado_eur) AS estimado_eur,
+           string_agg(a.nota, ' · ' ORDER BY a.ate) AS nota,
+           count(*)::integer AS leituras
+      FROM g JOIN a ON a.n = g.n
+     GROUP BY g.grupo
   )
-  SELECT j.id, j.de, j.ate, j.tipo, j.real_eur,
-         a.chamadas, a.peso_total, a.estimado_eur,
-         CASE WHEN a.peso_total > 0 AND j.real_eur >= 0
-              THEN j.real_eur / a.peso_total END,
-         j.nota
-    FROM j
-    CROSS JOIN LATERAL (
-      SELECT count(*) AS chamadas,
-             COALESCE(sum(ia_uso.peso(r)), 0) AS peso_total,
-             COALESCE(sum(r.custo_estimado_eur), 0) AS estimado_eur
-        FROM ia_uso.registos r
-       WHERE r.criado_em > j.de AND r.criado_em <= j.ate
-    ) a;
+  SELECT gr.leitura_id, gr.de, gr.ate, gr.tipo, gr.real_eur,
+         gr.chamadas, gr.peso_total, gr.estimado_eur,
+         -- `> 0` e não `>= 0`: um grupo com chamadas a 0,00 € é um grupo
+         -- que a Google ainda não cobrou, e um fator zero punha-as a custar
+         -- nada.
+         CASE WHEN gr.peso_total > 0 AND gr.real_eur > 0
+              THEN gr.real_eur / gr.peso_total END,
+         gr.nota, gr.leituras,
+         (gr.peso_total > 0 AND gr.real_eur = 0)
+    FROM gr;
 $$;
 
 -- ── O custo medido de cada chamada ─────────────────────────────────────

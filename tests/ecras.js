@@ -67,6 +67,14 @@ function resumo(calibrado){
     total:{pedidos:7,custoEur:calibrado?0.1923:null,estimadoEur:0.043}};
 }
 const JANELAS = [
+  // A Google atrasou-se: a janela das chamadas deu 0,00 € e a seguinte
+  // apareceu com o euro e sem chamadas — o `fatores()` juntou-as.
+  {leitura_id:5,de:'2026-09-30T08:00:00Z',ate:'2026-09-30T16:00:00Z',tipo:'saldo',
+   real_eur:0.09,chamadas:21,peso_total:0.0196,estimado_eur:0.02,fator:4.589,
+   nota:null,desvio:3.5,leituras:2,pendente:false},
+  {leitura_id:6,de:'2026-09-30T16:00:00Z',ate:'2026-09-30T17:00:00Z',tipo:'saldo',
+   real_eur:0,chamadas:1,peso_total:0.001,estimado_eur:0.001,fator:null,
+   nota:null,desvio:-1,leituras:1,pendente:true},
   {leitura_id:2,de:'2026-09-20T13:00:00Z',ate:'2026-09-22T09:00:00Z',tipo:'saldo',
    real_eur:0.1923,chamadas:7,peso_total:0.18311,estimado_eur:0.043,fator:1.0502,
    nota:'primeira leitura a sério',desvio:3.4721},
@@ -197,15 +205,24 @@ const POUPANCA = {
   // Saldo
   await page.click('.it[data-tab="saldo"]');
   await page.waitForTimeout(400);
-  ok('janelas desenhadas', await page.locator('#lt-janelas tbody tr').count() === 2);
+  ok('janelas desenhadas', await page.locator('#lt-janelas .li').count() === 4);
   ok('janela sem número marcada', await page.locator('#lt-janelas .tag.er').count() === 1);
-  ok('aviso das janelas más', (await page.locator('#lt-janelas .aviso').innerText()).includes('feitios diferentes'));
-  ok('3 leituras', await page.locator('#lt-lista tbody tr').count() === 3);
+  // Várias leituras no mesmo dia: sem a hora, "30/09 → 30/09" duas vezes.
+  ok('janela traz a hora', (await page.locator('#lt-janelas .li-t >> nth=0').innerText()).includes(':'));
+  ok('janela juntada dita', (await page.locator('#lt-janelas .li >> nth=0').innerText()).includes('2 leituras juntas'));
+  ok('janela pendente a âmbar', await page.locator('#lt-janelas .li-wn .tag.wn').count() === 1
+     && (await page.locator('#lt-janelas').innerText()).includes('ainda não cobrou'));
+  ok('última leitura à vista', (await page.locator('#lt-ultima').innerText()).includes('Última leitura'));
+  ok('aviso das janelas más', (await page.locator('#lt-janelas .aviso').first().innerText()).includes('feitios diferentes'));
+  ok('3 leituras', await page.locator('#lt-lista .li').count() === 3);
   ok('carregado visível em modo saldo', await page.locator('#lt-carr-box').isVisible());
-  await page.selectOption('#lt-tipo', 'gasto');
+  await page.click('#lt-tipo-segs .seg[data-v="gasto"]');
   await page.waitForTimeout(150);
-  ok('carregado esconde-se em modo gasto', !(await page.locator('#lt-carr-box').isVisible()));
-  await page.selectOption('#lt-tipo', 'saldo');
+  ok('carregado esconde-se em modo gasto', !(await page.locator('#lt-carr-box').isVisible())
+     && await page.locator('#lt-tipo').inputValue() === 'gasto');
+  await page.click('#lt-tipo-segs .seg[data-v="saldo"]');
+  ok('sem zoom no viewport', (await page.locator('meta[name=viewport]').getAttribute('content')).includes('user-scalable=no'));
+  ok('campos a 16px (o iOS não dá zoom)', await page.locator('#lt-nota').evaluate(e => getComputedStyle(e).fontSize) === '16px');
   await page.screenshot({ path: '/tmp/aic-5-saldo.png', fullPage: true });
 
   // Definições
