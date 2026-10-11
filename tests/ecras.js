@@ -15,29 +15,29 @@ const srv = http.createServer((req,res)=>{
 
 // ── Dados reais da base (7 chamadas de 20/09) ──
 const REGISTOS = [
-  {id:7,criado_em:'2026-09-20T14:32:19.117Z',app:'garrafeira',funcao:'vinho-info',estado:'ok',
+  {id:7,funcionalidade:'procurar',criado_em:'2026-09-20T14:32:19.117Z',app:'garrafeira',funcao:'vinho-info',estado:'ok',
    modelo:'gemini-flash-lite-latest',pesquisa_web:true,tokens_entrada:993,tokens_saida:485,
    tokens_pensamento:null,custo_estimado_eur:0.001,duracao_ms:8210,quem:'a@b.c',erro:null,
    detalhe:{modo:'barato',pesquisa:'grounding:google_search',campos:5},
    peso:0.030321,fator:1.0502,custo_eur:0.031843,provisorio:false},
-  {id:6,criado_em:'2026-09-20T14:18:02.069Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
+  {id:6,funcionalidade:'procurar',criado_em:'2026-09-20T14:18:02.069Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
    modelo:'gemini-flash-lite-latest',pesquisa_web:null,tokens_entrada:1137,tokens_saida:505,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:6100,quem:'a@b.c',erro:null,
    detalhe:{campos:1,manual:false,vinho_id:162,propostos:1,fontes:0},
    peso:0.030316,fator:1.0502,custo_eur:0.031838,provisorio:false},
-  {id:5,criado_em:'2026-09-20T14:05:47.019Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
+  {id:5,funcionalidade:'procurar',criado_em:'2026-09-20T14:05:47.019Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
    modelo:'gemini-flash-latest',pesquisa_web:null,tokens_entrada:5989,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:21400,quem:'a@b.c',erro:null,
    detalhe:{passo:'sem_campos',campos:0,modelo:'gemini-flash-latest',finishReason:'MAX_TOKENS',
             usageMetadata:{promptTokenCount:5989,candidatesTokenCount:0,totalTokenCount:10966}},
    peso:0.031797,fator:1.0502,custo_eur:0.033394,provisorio:false},
-  {id:4,criado_em:'2026-09-20T13:56:07.711Z',app:'winecatalog',funcao:'catalogo-info',estado:'erro',
+  {id:4,funcionalidade:'procurar',criado_em:'2026-09-20T13:56:07.711Z',app:'winecatalog',funcao:'catalogo-info',estado:'erro',
    modelo:'gemini-flash-latest',pesquisa_web:null,tokens_entrada:3292,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:18000,quem:'a@b.c',
    erro:'o modelo não devolveu resposta (MAX_TOKENS)',
    detalhe:{passo:'gemini_vazio',finishReason:'MAX_TOKENS'},
    peso:0.030988,fator:1.0502,custo_eur:0.032544,provisorio:false}
-  ,{id:3,criado_em:'2026-09-20T13:40:00.000Z',app:'wineselection',funcao:'sugerir-vinho',estado:'erro',
+  ,{id:3,funcionalidade:'sugerir',criado_em:'2026-09-20T13:40:00.000Z',app:'wineselection',funcao:'sugerir-vinho',estado:'erro',
    modelo:'gemini-flash-latest',pesquisa_web:true,tokens_entrada:0,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0,duracao_ms:2100,quem:'a@b.c',
    erro:'gemini 503 (gemini-flash-latest): The model is overloaded.',
@@ -144,7 +144,9 @@ const POUPANCA = {
                 body: JSON.stringify({ id: 'u1', email: 'diogo.andre.f.silva@gmail.com' }) }));
   await page.route('**/rest/v1/rpc/*', r => {
     const fn = r.request().url().split('/rpc/')[1].split('?')[0];
-    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos: REGISTOS,
+    const args = JSON.parse(r.request().postData() || '{}');
+    const custos = REGISTOS.filter(x => !args.p_app || x.app === args.p_app);
+    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos,
                    janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS,
                    poupanca_catalogo: POUPANCA };
     if (!(fn in mapa)) return r.fulfill({ status: 404, body: '{"message":"fn desconhecida: ' + fn + '"}' });
@@ -170,13 +172,16 @@ const POUPANCA = {
 
   // Resumo por calibrar
   ok('aviso "sem leitura"', (await page.locator('#rs-aviso').innerText()).includes('leitura de saldo'));
-  ok('medido a "—" sem calibração', (await page.locator('#rs-topo .tbox .tv').first().innerText()).trim() === '—');
-  ok('estimativa visível', (await page.locator('#rs-topo .tbox.alt .tv').innerText()).includes('0,04'));
-  ok('custo por app: 2 apps com uso', await page.locator('#rs-apps .ap').count() === 2);
+  ok('medido a "—" sem calibração', (await page.locator('#rs-topo .hero-v').innerText()).trim() === '—');
+  ok('estimativa visível', (await page.locator('#rs-topo .hero-ev').innerText()).includes('0,04'));
+  ok('custo por app: um cartão por app com uso', await page.locator('#rs-apps .cd').count() === 2);
   ok('app sem uso dita como calada', (await page.locator('#rs-apps .ap-cal').last().innerText()).includes('splitwisely'));
   ok('função que nunca registou à vista', (await page.locator('#rs-apps .aviso').innerText()).includes('fatura-ocr'));
-  ok('um cartão de funcionalidades por app com uso', await page.locator('#rs-funcs .card').count() === 2);
-  ok('sem calibração, o euro da app vem a cinzento', await page.locator('#rs-apps .ap-e.eur-est').count() === 2);
+  // A entrada não é uma funcionalidade: fica fora da grelha (está na ficha da app).
+  ok('um cartão por funcionalidade, sem a entrada', await page.locator('#rs-funcs .cd').count() === 3
+     && !(await page.locator('#rs-funcs').innerText()).includes('Recusado'));
+  ok('sem calibração, o euro da app vem a cinzento', await page.locator('#rs-apps .cd-e.eur-est').count() === 2);
+  ok('sem calibração, a barra também', await page.locator('#rs-apps .bar.est').count() === 2);
   ok('marca "vazio" no modelo sem saída', await page.locator('#rs-modelos .tag.wn').count() >= 1);
   ok('catálogo: 3 ações, cada uma na sua unidade', await page.locator('#rs-catalogo tbody tr').count() === 3
      && (await page.locator('#rs-catalogo tbody').innerText()).includes('notas'));
@@ -187,20 +192,76 @@ const POUPANCA = {
   CALIBRADO = true;
   await page.evaluate(() => rsCarregar());
   await page.waitForTimeout(300);
-  ok('medido aparece com calibração', (await page.locator('#rs-topo .tbox .tv').first().innerText()).includes('0,19'));
+  ok('medido aparece com calibração', (await page.locator('#rs-topo .hero-v').innerText()).includes('0,19'));
   ok('aviso desaparece', !(await page.locator('#rs-aviso').innerText()).includes('leitura de saldo'));
-  ok('desvio dito', (await page.locator('#rs-topo .tbox.alt .ts').innerText()).toLowerCase().includes('curta'));
-  ok('app mais cara primeiro', (await page.locator('#rs-apps .ap-t >> nth=0').innerText()).includes('garrafeira'));
-  ok('euro medido da app a tinta', await page.locator('#rs-apps .ap-e.eur-med').count() === 2);
-  // A mais cara POR USO primeiro (sites, 0,0637), e a entrada sempre no fim.
-  const fns = await page.locator('#rs-funcs .card >> nth=0').locator('.fn-t').allInnerTexts();
-  ok('funcionalidades pelo custo médio, a mais cara primeiro', fns[0].includes('sites concretos'));
-  ok('"Recusado à entrada" vai para o fim', fns[fns.length-1].includes('Recusado'));
-  ok('médio por uso a 4 casas', (await page.locator('#rs-funcs .fn-e >> nth=0').innerText()).includes('0,0637'));
+  ok('desvio dito', (await page.locator('#rs-topo .hero-dv').innerText()).toLowerCase().includes('curta'));
+  ok('app mais cara primeiro', (await page.locator('#rs-apps .cd-n >> nth=0').innerText()).includes('garrafeira'));
+  ok('euro medido da app a tinta', await page.locator('#rs-apps .cd-e.eur-med').count() === 2);
+  // A mais cara POR USO primeiro, de todas as apps: sites (0,0637), depois
+  // a do catálogo (0,0323), depois perguntar à IA (0,0318).
+  const fns = await page.locator('#rs-funcs .cd-t').allInnerTexts();
+  ok('funcionalidades pelo custo médio, a mais cara primeiro', fns[0].includes('sites concretos')
+     && fns[1].includes('ficha do vinho') && fns[2].includes('perguntar à IA'));
+  ok('o cartão diz de que app é', (await page.locator('#rs-funcs .cd >> nth=1').locator('.cd-a').innerText()).toLowerCase().includes('winecatalog'));
+  ok('médio por uso a 4 casas', (await page.locator('#rs-funcs .cd-fe >> nth=0').innerText()).includes('0,0637'));
   ok('Serper contado (sem euro)', (await page.locator('#rs-apps').innerText()).includes('3 consultas ao Serper')
-     && (await page.locator('#rs-funcs').innerText()).includes('3 consultas Serper'));
+     && (await page.locator('#rs-funcs .cd >> nth=0').innerText()).includes('3 Serper'));
   ok('vazios ditos na funcionalidade', (await page.locator('#rs-funcs').innerText()).includes('2 vazios'));
+  ok('"poucos usos" num médio de 1 uso', await page.locator('#rs-funcs .cd >> nth=0').locator('.tag', { hasText: 'poucos usos' }).count() === 1);
+  ok('modelos em cartões, com o vazio marcado', await page.locator('#rs-modelos .cd').count() === 2);
   await page.screenshot({ path: '/tmp/aic-2-resumo.png', fullPage: true });
+
+  // A ficha de uma app: os números, o gráfico e as funcionalidades dela.
+  await page.click('#rs-apps .cd >> nth=0');
+  await page.waitForTimeout(300);
+  ok('ficha da app abre', await page.locator('#modal-rs').isVisible()
+     && (await page.locator('#rs-sh-titulo').innerText()) === 'garrafeira');
+  ok('ficha da app: gasto e parte do total', (await page.locator('#rs-sh-corpo .kpi >> nth=0').innerText()).includes('0,10')
+     && (await page.locator('#rs-sh-corpo .kpi >> nth=0').innerText()).includes('% do total'));
+  ok('ficha da app: ok e erros na barra', await page.locator('#rs-sh-corpo .est-b i').count() === 2);
+  ok('ficha da app: o gráfico tem um dia por coluna', await page.locator('#rs-sh-graf .gr-c').count() === 31);
+  ok('ficha da app: as funcionalidades dela, e a entrada à parte', await page.locator('#rs-sh-corpo .cd').count() === 2
+     && await page.locator('#rs-sh-corpo .ent').count() === 1);
+  await page.screenshot({ path: '/tmp/aic-2b-ficha-app.png' });
+
+  // Da app para uma funcionalidade, e o "‹" volta.
+  await page.click('#rs-sh-corpo .cd >> nth=1');
+  await page.waitForTimeout(300);
+  ok('funcionalidade abre dentro da ficha', (await page.locator('#rs-sh-titulo').innerText()).includes('perguntar à IA')
+     && await page.locator('#rs-sh-volta').isVisible());
+  ok('funcionalidade: a pesquisa Google contada', (await page.locator('#rs-sh-corpo .kv').innerText()).includes('1 de 1'));
+  ok('funcionalidade: só as chamadas DELA', await page.locator('#rs-sh-lista .rlin').count() === 1);
+  ok('o gráfico lê-se ao tocar', await (async () => {
+    await page.locator('#rs-sh-graf .gr-c >> nth=-1').dispatchEvent('pointerdown');
+    return (await page.locator('#rs-sh-graf .gr-r').innerText()).includes('chamada');
+  })());
+  await page.click('#rs-sh-volta');
+  await page.waitForTimeout(200);
+  ok('"‹" volta à app', (await page.locator('#rs-sh-titulo').innerText()) === 'garrafeira'
+     && !(await page.locator('#rs-sh-volta').isVisible()));
+
+  // Do cartão de uma funcionalidade do ecrã, direto à ficha dela; de uma
+  // chamada, a ficha do registo POR CIMA, e o Escape fecha uma de cada vez.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  ok('Escape fecha a ficha da app', !(await page.locator('#modal-rs').isVisible()));
+  await page.click('#rs-funcs .cd >> nth=1');
+  await page.waitForTimeout(300);
+  ok('funcionalidade abre do ecrã, sem "‹"', (await page.locator('#rs-sh-titulo').innerText()).includes('ficha do vinho')
+     && !(await page.locator('#rs-sh-volta').isVisible()));
+  ok('funcionalidade: as 3 chamadas da catalogo-info', await page.locator('#rs-sh-lista .rlin').count() === 3
+     && await page.locator('#rs-sh-lista .rlin.vazio').count() === 2);
+  await page.screenshot({ path: '/tmp/aic-2c-ficha-func.png' });
+  await page.click('#rs-sh-lista .rlin.vazio >> nth=0');
+  await page.waitForTimeout(300);
+  ok('a chamada abre a ficha do registo por cima', await page.locator('#modal-registo').isVisible()
+     && (await page.locator('#mr-corpo').innerText()).includes('200 com o corpo vazio'));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  ok('Escape fecha só a de cima', !(await page.locator('#modal-registo').isVisible())
+     && await page.locator('#modal-rs').isVisible());
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
 
   // Registos
   await page.click('.it[data-tab="registos"]');

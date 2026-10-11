@@ -12,10 +12,12 @@ escrevem nele. Lá ficou um ponteiro em `db/README.md` e **nenhuma cópia**.
 
 ## Estrutura
 - `index.html` — só markup: os quatro separadores, os três ecrãs de
-  autenticação, o splash e a ficha de um registo.
+  autenticação, o splash, a ficha de uma app/funcionalidade e a de um
+  registo.
 - `app.js` — toda a lógica (~950 linhas). Secções (`grep` pelo título, não
   leias o ficheiro todo): SESSÃO SUPABASE · RPC · ESCAPES · TOAST ·
-  MODAIS · TABS · FORMATAÇÃO · **O 200 VAZIO** · **RESUMO** · REGISTOS ·
+  MODAIS · TABS · FORMATAÇÃO · **O 200 VAZIO** · **RESUMO** · POR APP E
+  POR FUNCIONALIDADE · A FICHA DE UMA APP OU DE UMA FUNCIONALIDADE · REGISTOS ·
   **SALDO** · RÁCIOS · AUTH · INIT.
 - `style.css` — todo o CSS. Ler o cabeçalho antes de lhe mexer: a cor é um
   sistema, não gosto.
@@ -147,6 +149,33 @@ por app com as funcionalidades pelo custo médio por uso** (`resumo_apps()`,
 - O contrato de como todas escrevem está no `db/README.md` ("O contrato do
   registo"). **SQL primeiro, deploy depois**: uma function que grave a
   coluna antes de ela existir perde as linhas em silêncio.
+
+### O Resumo é de CARTÕES, e o detalhe abre-se ao tocar (11/10/2026)
+O dono: "o grafismo que está a faltar, principalmente no primeiro ecrã".
+- **Em cima, o número grande** (`.hero`), a grafite: o euro MEDIDO é o
+  grafite do sistema, por isso é a única coisa que pode ser assim tão
+  grande. A estimativa por baixo, a branco apagado.
+- **Um cartão por app** e **um por funcionalidade de TODAS as apps** (a mais
+  cara por uso primeiro; só as 6 primeiras, o resto a um toque — a entrada
+  fica de fora, não é uma funcionalidade). Os modelos também vão em
+  cartões, mas esses não abrem nada e por isso não são botões.
+- **Tocar abre uma ficha** (`#modal-rs`) que sobe de baixo e é uma PILHA:
+  app → funcionalidade, com o "‹" a voltar. Os números de cima são os do
+  `resumo_apps` (os mesmos dos cartões); o **gráfico do custo por dia** e as
+  **últimas chamadas** vêm da `custos` da app, pedida só quando a ficha
+  abre e só até 1000 — se houver mais, o gráfico diz desde quando conta.
+- A chamada de uma funcionalidade é a que ela **gravou** na coluna (o
+  histórico também está lá). O JS **não volta a deduzir** a regra da
+  `ia_uso.funcionalidade()`: duas cópias dela eram duas respostas.
+- Uma chamada abre a ficha do registo **por cima** (vem depois no HTML, no
+  mesmo z-index), e o **Escape fecha uma de cada vez**.
+- O gráfico é UMA série: grafite se é medido, cinzento se é a estimativa,
+  a parte provisória a âmbar por cima — e só aí há legenda. Colunas de 24px
+  no máximo, 2px de ar, a ponta arredondada; um dia por coluna até 30 dias,
+  uma semana na janela de 90. O valor lê-se ao tocar, na linha por cima.
+- **O `flex-grow` das partes de uma coluna vai em percentagem.** Um
+  `flex-grow` que some menos de 1 só enche essa fração do espaço, e os
+  cêntimos somam sempre menos de 1: as colunas ficavam a boiar.
 
 ## O 200 vazio é o que este painel existe para mostrar
 HTTP 200, `candidatesTokenCount: 0` — o modelo gastou o orçamento a PENSAR

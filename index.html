@@ -194,6 +194,24 @@
   </div>
 </section>
 
+<!-- ══ FICHA DE UMA APP OU DE UMA FUNCIONALIDADE ══
+     Vem ANTES da ficha de um registo de propósito: as duas estão no mesmo
+     z-index, e a de um registo — que se abre de dentro desta — fica por
+     cima por vir depois. -->
+<div id="modal-rs" class="modal" onclick="fecharFundo(event,'modal-rs')">
+  <div class="mbox">
+    <div class="mtop">
+      <button id="rs-sh-volta" class="mvolta" onclick="rsVoltar()" style="display:none" aria-label="Voltar">&#8249;</button>
+      <div class="mtit-w">
+        <div id="rs-sh-titulo" class="mtit"></div>
+        <div id="rs-sh-sub" class="msub"></div>
+      </div>
+      <button class="mx" onclick="fecharModal('modal-rs')" aria-label="Fechar">&times;</button>
+    </div>
+    <div id="rs-sh-corpo"></div>
+  </div>
+</div>
+
 <!-- ══ FICHA DE UM REGISTO ══ -->
 <div id="modal-registo" class="modal" onclick="fecharFundo(event,'modal-registo')">
   <div class="mbox">

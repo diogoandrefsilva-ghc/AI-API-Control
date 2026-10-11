@@ -275,18 +275,25 @@ function rsJanela(d){
 
 async function rsCarregar(){
   const topo=document.getElementById('rs-topo');
-  topo.innerHTML='<div class="vazio-msg">a carregar…</div>';
+  /* Ao mudar de janela, o que já estava desenhado fica a meia tinta até
+     chegar o novo: sem isto o ecrã inteiro piscava e saltava de altura. */
+  const tp=document.getElementById('t-resumo');
+  if(topo.innerHTML)tp.classList.add('a-carregar');
+  else topo.innerHTML='<div class="vazio-msg">a carregar…</div>';
+  RS_LINHAS={};
   try{
     RS_DADOS=await iaRpc('resumo_medido',{p_dias:RS_DIAS});
   }catch(e){
     document.getElementById('rs-aviso').innerHTML=
       '<div class="aviso erro">'+esc(e.message)+'</div>';
+    tp.classList.remove('a-carregar');
     topo.innerHTML='';
     document.getElementById('rs-apps').innerHTML='';
     document.getElementById('rs-funcs').innerHTML='';
     document.getElementById('rs-modelos').innerHTML='';
     return;
   }
+  tp.classList.remove('a-carregar');
   rsDesenhar();
   rsCarregarApps();
   rsCarregarCatalogo();
@@ -363,47 +370,61 @@ function rsDesenhar(){
   }
   document.getElementById('rs-aviso').innerHTML=av;
 
-  /* ── Os dois números grandes ──
-     O MEDIDO à esquerda, em tinta firme; o ESTIMADO à direita, em
-     cinzento e mais pequeno. Não é hierarquia por gosto: é a diferença
-     entre um número que se pode defender e um palpite, e este painel
-     existe para não os confundir.
-     São da JANELA escolhida — o seletor por cima deles tem de lhes mexer.
-     O "desde sempre" fica por baixo, em letra pequena. */
+  /* ── O número grande ──
+     O MEDIDO em cima, enorme e em tinta firme; o ESTIMADO por baixo, mais
+     pequeno e apagado. Não é hierarquia por gosto: é a diferença entre um
+     número que se pode defender e um palpite, e este painel existe para
+     não os confundir. O cartão é grafite porque o euro medido É o grafite
+     do sistema de cor — não é decoração.
+     São da JANELA escolhida — o seletor por cima tem de lhes mexer. O
+     "desde sempre" fica em letra pequena. */
   const medido=cal?eurFmt(jan.custoEur,2):null;
+  const porChamada=cal&&Number(jan.pedidos)>0&&jan.custoEur!=null?Number(jan.custoEur)/Number(jan.pedidos):null;
   document.getElementById('rs-topo').innerHTML=
-    '<div class="topo">'
-    + '<div class="tbox"><div class="tl">Gasto medido · '+RS_DIAS+' dias</div>'
-    +   '<div class="tv">'+(medido!=null?esc(medido):'<span class="eur-nd">—</span>')+'</div>'
-    +   '<div class="ts">'+nFmt(jan.pedidos)+' chamadas'
-    +     (cal?' · desde sempre '+esc(eurFmt(tot.custoEur,2)):' · por calibrar')+'</div></div>'
-    + '<div class="tbox alt"><div class="tl">Estimativa das functions</div>'
-    +   '<div class="tv">'+esc(eurFmt(jan.estimadoEur,2))+'</div>'
-    +   '<div class="ts">'+rsDesvioTxt(jan)+'</div></div>'
-    + '</div>';
+    '<div class="hero">'
+    + '<div class="hero-l">Gasto medido · '+RS_DIAS+' dias</div>'
+    + '<div class="hero-v">'+(medido!=null?esc(medido):'<span class="hero-nd">—</span>')+'</div>'
+    /* Cada bocado inteiro (`nowrap`): a linha parte-se ENTRE eles, nunca
+       a meio de um "desde sempre 2,69 €". */
+    + '<div class="hero-s"><span>'+nFmt(jan.pedidos)+' chamadas</span>'
+    +   (porChamada!=null?'<span>'+esc(eurFmt(porChamada,4))+' cada, em média</span>':'')
+    +   '<span>'+(cal?'desde sempre '+esc(eurFmt(tot.custoEur,2)):'por calibrar')+'</span></div>'
+    + '<div class="hero-est"><div class="hero-l">Estimativa das functions</div>'
+    +   '<div class="hero-er"><span class="hero-ev">'+esc(eurFmt(jan.estimadoEur,2))+'</span>'
+    +   '<span class="hero-dv">'+rsDesvioTxt(jan)+'</span></div>'
+    + '</div></div>';
 
-  /* ── Por modelo ── */
+  /* ── Por modelo ──
+     Cartões como os das apps, mas sem ficha (não há mais nada a dizer de
+     um modelo do que isto). Os tokens vão em três números lado a lado: a
+     SAÍDA a zero com a entrada aos milhares é o 200 vazio. */
   const ms=Array.isArray(d.porModelo)?d.porModelo:[];
-  let hm='<div class="card"><h2>Por modelo</h2>'
-    + '<p class="nota">A pergunta a que isto responde é se o modelo barato '
-    + 'chega. A coluna da <b>saída</b> a zero com a entrada aos milhares é o '
-    + '200 vazio: pagou-se e não veio nada.</p>'
-    + '<div class="tw"><table><thead><tr><th>Modelo</th><th class="n">Medido</th>'
-    + '<th class="n">Chamadas</th><th class="n">Entrada</th><th class="n">Saída</th>'
-    + '<th class="n">Pensam.</th></tr></thead><tbody>';
-  if(!ms.length)hm+='<tr><td colspan="6" class="t-sub">Sem dados.</td></tr>';
+  let totM=0;
+  for(let i=0;i<ms.length;i++)totM+=Number((cal?ms[i].custoEur:ms[i].estimadoEur)||0);
+  let hm='<div class="sec-h"><h2>Por modelo</h2><span>'+(cal?'medido':'pela estimativa')+' · '+RS_DIAS+' dias</span></div>'
+    + '<p class="nota sec-p">A pergunta a que isto responde é se o modelo barato chega. '
+    + 'A <b>saída</b> a zero com a entrada aos milhares é o 200 vazio: pagou-se e não veio nada.</p>';
+  if(!ms.length)hm+='<div class="card"><div class="vazio-msg">Sem dados.</div></div>';
+  else hm+='<div class="cards cards-l">';
   for(let i=0;i<ms.length;i++){
     const m=ms[i];
+    const v=cal?m.custoEur:m.estimadoEur,cls=cal?'eur-med':'eur-est';
+    const quota=totM>0&&v!=null?Number(v)/totM:0;
     const semSaida=Number(m.tokensSaida||0)===0&&Number(m.tokensEntrada||0)>0;
-    hm+='<tr><td class="t-app">'+esc(m.modelo)+'</td>'
-      + '<td class="n eur-med">'+(m.custoEur==null?'—':esc(eurFmt(m.custoEur,2)))+'</td>'
-      + '<td class="n">'+nFmt(m.pedidos)+'</td>'
-      + '<td class="n">'+nFmt(m.tokensEntrada)+'</td>'
-      + '<td class="n">'+nFmt(m.tokensSaida)+(semSaida?'<span class="tag wn">vazio</span>':'')+'</td>'
-      + '<td class="n">'+nFmt(m.tokensPensamento)+'</td></tr>';
+    hm+='<div class="cd cd-st">'
+      + '<div class="cd-top"><span class="cd-n">'+esc(m.modelo)+'</span>'
+      +   '<span class="cd-p">'+(totM>0?Math.round(quota*100)+'%':'')+'</span></div>'
+      + '<div class="cd-e '+cls+'">'+(v==null?'—':esc(eurFmt(v,2)))+'</div>'
+      + '<div class="bar'+(cal?'':' est')+'"><i style="width:'+(quota*100).toFixed(1)+'%"></i></div>'
+      + '<div class="cd-s">'+nFmt(m.pedidos)+' chamadas</div>'
+      + '<div class="tk">'
+      +   '<div><span>Entrada</span><b>'+nFmt(m.tokensEntrada)+'</b></div>'
+      +   '<div><span>Saída</span><b>'+nFmt(m.tokensSaida)+(semSaida?'<i class="tag wn">vazio</i>':'')+'</b></div>'
+      +   '<div><span>Pensam.</span><b>'+nFmt(m.tokensPensamento)+'</b></div>'
+      + '</div></div>';
   }
-  hm+='</tbody></table></div>'
-    + '<p class="nota" style="padding:0 4px">Os <b>tokens são facto</b> — vêm do '
+  if(ms.length)hm+='</div>';
+  hm+='<p class="nota sec-n">Os <b>tokens são facto</b> — vêm do '
     + '<code>usageMetadata</code> da API. O euro medido é a repartição de um saldo '
     + 'real pelos tokens, e a repartição dentro de cada janela depende dos rácios '
     + 'em Definições. O total de uma janela está certo; a chamada individual está '
@@ -417,7 +438,7 @@ function rsDesvioTxt(tot){
   if(!(e>0))return 'a estimativa não diz nada';
   const dv=(m-e)/e;
   if(Math.abs(dv)<0.05)return 'a estimativa estava certa';
-  return 'a estimativa estava '+(dv>0?'CURTA':'LONGA')+' '+pctFmt(Math.abs(dv));
+  return 'a estimativa estava '+(dv>0?'CURTA':'LONGA')+' '+decFmt(Math.abs(dv)*100,0)+'%';
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -437,14 +458,19 @@ function rsDesvioTxt(tot){
    uma resposta, e uma média que ignorasse os erros escondia precisamente
    as avarias que mais custam. */
 let RS_APPS=null;
+let RS_ATIVAS=[];    // as apps com uso na janela, cada uma com as suas funcionalidades já ordenadas (`_fs`)
+let RS_TOTAL=0;      // o euro de todas, para a parte de cada uma
+let RS_TODAS=false;  // a grelha de funcionalidades mostra todas, ou só as mais caras
+const RS_TOPO=6;
 
 async function rsCarregarApps(){
-  const a=document.getElementById('rs-apps'),f=document.getElementById('rs-funcs');
-  a.innerHTML='<div class="vazio-msg">a carregar…</div>';f.innerHTML='';
+  const a=document.getElementById('rs-apps');
+  if(!a.innerHTML)a.innerHTML='<div class="vazio-msg">a carregar…</div>';
   try{
     RS_APPS=await iaRpc('resumo_apps',{p_dias:RS_DIAS});
   }catch(e){
     a.innerHTML='<div class="card"><h2>Por app</h2><div class="aviso erro">'+esc(e.message)+'</div></div>';
+    document.getElementById('rs-funcs').innerHTML='';
     return;
   }
   rsDesenharApps();
@@ -472,120 +498,481 @@ function rsJuntarEntradas(fs){
     ['custoEur','estimadoEur'].forEach(function(k){
       e[k]=e[k]==null&&f[k]==null?null:Number(e[k]||0)+Number(f[k]||0);});
     e.provisorio=!!(e.provisorio||f.provisorio);
+    if(f.ultimaChamada&&!(Date.parse(e.ultimaChamada)>=Date.parse(f.ultimaChamada)))e.ultimaChamada=f.ultimaChamada;
   }
   if(e){e.funcao=fn.join(', ');out.push(e);}
   return out;
 }
 
+/* Pelo custo MÉDIO por uso — é a pergunta "isto devia ser premium?". O
+   "Recusado à entrada" vai sempre para o fim: não é uma funcionalidade, é
+   o pedido que nem chegou a ser uma. */
+function rsPorMedio(a,b){
+  const ea=a.chave==='entrada',eb=b.chave==='entrada';
+  if(ea!==eb)return ea?1:-1;
+  const ma=rsEur(a,'medioEur','medioEstEur').v,mb=rsEur(b,'medioEur','medioEstEur').v;
+  if((mb||0)!==(ma||0))return (mb||0)-(ma||0);
+  return Number(b.usos)-Number(a.usos);
+}
+
+/* As pastilhas de um cartão: só as que acrescentam. "Poucos usos" é a
+   média que ainda não quer dizer nada — uma funcionalidade usada uma vez
+   pode ficar no topo da lista só por azar. O Serper paga-se a outro
+   fornecedor e não está no saldo Google: sem a pastilha, os "Sugere-me
+   sites" liam-se como de graça. */
+function rsTags(x,poucos){
+  const cal=!!(RS_APPS&&RS_APPS.calibrado);
+  const pl=function(n,um,mais){return nFmt(n)+' '+(Number(n)===1?um:mais);};
+  let t='';
+  if(Number(x.erro)>0)t+='<span class="tag er">'+pl(x.erro,'erro','erros')+'</span>';
+  if(Number(x.vazios)>0)t+='<span class="tag wn">'+pl(x.vazios,'vazio','vazios')+'</span>';
+  if(x.provisorio&&cal)t+='<span class="tag wn">prov.</span>';
+  if(Number(x.serper)>0)t+='<span class="tag">+ '+nFmt(x.serper)+' Serper</span>';
+  if(poucos&&Number(x.ok)>0&&Number(x.ok)<5)t+='<span class="tag">poucos usos</span>';
+  return t?'<div class="cd-f">'+t+'</div>':'';
+}
+
+function rsCartaoApp(x,i){
+  const e=rsEur(x,'custoEur','estimadoEur');
+  const quota=RS_TOTAL>0&&e.v!=null?e.v/RS_TOTAL:0;
+  const medio=Number(x.ok)>0&&e.v!=null?e.v/Number(x.ok):null;
+  return '<button class="cd" onclick="rsAbrirApp('+i+')">'
+    + '<div class="cd-top"><span class="cd-n">'+esc(x.app)+'</span>'
+    +   '<span class="cd-p">'+(RS_TOTAL>0?Math.round(quota*100)+'%':'')+'</span></div>'
+    + '<div class="cd-e '+e.cls+'">'+esc(eurFmt(e.v,2))+'</div>'
+    + '<div class="bar'+(e.cls==='eur-est'?' est':'')+'"><i style="width:'+(quota*100).toFixed(1)+'%"></i></div>'
+    + '<div class="cd-s">'+nFmt(x.usos)+' uso'+(Number(x.usos)===1?'':'s')+' · '+esc(desdeFmt(x.ultimaChamada))+'</div>'
+    + (medio!=null?'<div class="cd-s">'+esc(eurFmt(medio,4))+' por uso</div>':'')
+    + rsTags({erro:x.erro,vazios:x.vazios,provisorio:x.provisorio},false)
+    + '</button>';
+}
+
+/* `maxM` é o médio mais caro do conjunto onde o cartão está (a grelha de
+   todas, ou a de uma app): a barra compara-o com esse. */
+function rsCartaoFunc(x,f,maxM,comApp,onclick){
+  const m=rsEur(f,'medioEur','medioEstEur'),t=rsEur(f,'custoEur','estimadoEur');
+  const w=maxM>0&&m.v!=null?m.v/maxM*100:0;
+  return '<button class="cd cd-fn" onclick="'+onclick+'">'
+    + (comApp?'<div class="cd-a">'+esc(x.app)+'</div>':'')
+    + '<div class="cd-t">'+esc(f.nome)+'</div>'
+    + (m.v==null
+        ?'<div class="cd-fe eur-nd">—</div><div class="cd-u">sem usos conseguidos</div>'
+        :'<div class="cd-fe '+m.cls+'">'+esc(eurFmt(m.v,4))+'</div><div class="cd-u">por uso</div>')
+    + '<div class="bar'+(m.cls==='eur-est'?' est':'')+'"><i style="width:'+w.toFixed(1)+'%"></i></div>'
+    + '<div class="cd-s">'+nFmt(f.usos)+' uso'+(Number(f.usos)===1?'':'s')+' · '+esc(eurFmt(t.v,2))+' no total</div>'
+    + rsTags(f,true)
+    + '</button>';
+}
+
+function rsMedioMax(fs){
+  let mx=0;
+  for(let k=0;k<fs.length;k++){const m=rsEur(fs[k],'medioEur','medioEstEur').v;if(m>mx)mx=m;}
+  return mx;
+}
+
+function rsVerTodas(){RS_TODAS=!RS_TODAS;rsDesenharApps();}
+
 function rsDesenharApps(){
   const d=RS_APPS||{};
   const cal=!!d.calibrado;
   const apps=Array.isArray(d.apps)?d.apps:[];
-  const ativas=apps.filter(function(x){return Number(x.usos)>0;});
+  RS_ATIVAS=apps.filter(function(x){return Number(x.usos)>0;});
   const caladas=apps.filter(function(x){return !(Number(x.usos)>0);});
-  let total=0;
-  for(let i=0;i<ativas.length;i++){const e=rsEur(ativas[i],'custoEur','estimadoEur');total+=e.v||0;}
+  RS_TOTAL=0;
+  for(let i=0;i<RS_ATIVAS.length;i++){
+    const x=RS_ATIVAS[i];
+    x._tot=rsEur(x,'custoEur','estimadoEur').v||0;
+    x._fs=rsJuntarEntradas(Array.isArray(x.funcionalidades)?x.funcionalidades:[]).sort(rsPorMedio);
+    RS_TOTAL+=x._tot;
+  }
 
-  /* ── Custo por app ── */
-  let h='<div class="card"><h2>Custo por app</h2>'
-    + '<p class="nota">Nos últimos '+RS_DIAS+' dias'+(cal?'':', <b>pela estimativa</b> (ainda sem saldo lido)')
-    + '. A barra é a parte de cada app no total; a última chamada é o <b>sinal de vida</b>.</p>';
-  if(!ativas.length)h+='<div class="vazio-msg">Nenhuma chamada nesta janela.</div>';
-  for(let i=0;i<ativas.length;i++){
-    const x=ativas[i],e=rsEur(x,'custoEur','estimadoEur');
-    const quota=total>0&&e.v!=null?e.v/total:0;
-    const medio=Number(x.ok)>0&&e.v!=null?e.v/Number(x.ok):null;
-    h+='<div class="ap">'
-      + '<div class="ap-l"><div class="ap-t">'+esc(x.app)
-      +   (x.provisorio&&cal?'<span class="tag wn">prov.</span>':'')+'</div>'
-      +   '<div class="ap-s">'+nFmt(x.usos)+' usos'
-      +     (Number(x.erro)>0?' · <span class="t-er">'+nFmt(x.erro)+' erro'+(Number(x.erro)===1?'':'s')+'</span>':'')
-      +     (medio!=null?' · '+esc(eurFmt(medio,4))+' por uso':'')
-      +     (Number(x.serper)>0?' · '+nFmt(x.serper)+' Serper':'')
-      +     ' · '+esc(desdeFmt(x.ultimaChamada))+'</div>'
-      +   '<div class="bar"><i style="width:'+(quota*100).toFixed(1)+'%"></i></div></div>'
-      + '<div class="ap-v"><div class="ap-e '+e.cls+'">'+esc(eurFmt(e.v,2))+'</div>'
-      +   '<div class="ap-p">'+(total>0?Math.round(quota*100)+'%':'')+'</div></div>'
-      + '</div>';
+  /* ── Um cartão por app ──
+     A barra é a parte de cada uma no total; a última chamada é o SINAL DE
+     VIDA. Tocar abre a ficha: as funcionalidades e o custo dia a dia. */
+  let h='<div class="sec-h"><h2>Por app</h2><span>'+(cal?'medido':'pela estimativa')+' · '+RS_DIAS+' dias</span></div>';
+  if(!RS_ATIVAS.length)h+='<div class="card"><div class="vazio-msg">Nenhuma chamada nesta janela.</div></div>';
+  else{
+    h+='<div class="cards">';
+    for(let i=0;i<RS_ATIVAS.length;i++)h+=rsCartaoApp(RS_ATIVAS[i],i);
+    h+='</div>';
+  }
+  if(!cal&&RS_ATIVAS.length){
+    h+='<p class="nota sec-n">Ainda sem saldo lido: os euros são a <b>estimativa</b> das functions, a cinzento.</p>';
   }
   /* O Serper paga-se a outro fornecedor e não está no saldo Google que se
      mede aqui: não há euro honesto para lhe dar. O que há é a CONTAGEM —
      cada consulta é uma linha na fatura de lá. */
   let serper=0;
-  for(let i=0;i<ativas.length;i++)serper+=Number(ativas[i].serper||0);
+  for(let i=0;i<RS_ATIVAS.length;i++)serper+=Number(RS_ATIVAS[i].serper||0);
   if(serper>0){
-    h+='<p class="nota ap-cal"><b>'+nFmt(serper)+'</b> consulta'+(serper===1?'':'s')
+    h+='<p class="nota sec-n ap-cal"><b>'+nFmt(serper)+'</b> consulta'+(serper===1?'':'s')
       + ' ao <b>Serper</b> nestes '+RS_DIAS+' dias — pagas à parte, fora do saldo Google '
       + '(por isso sem euro aqui).</p>';
   }
   if(caladas.length){
-    h+='<p class="nota ap-cal">Sem uso nestes '+RS_DIAS+' dias: '
+    h+='<p class="nota sec-n ap-cal">Sem uso nestes '+RS_DIAS+' dias: '
       + caladas.map(function(x){return '<b>'+esc(x.app)+'</b> ('+esc(desdeFmt(x.ultimaChamada))+')';}).join(', ')
       + '.</p>';
   }
   const sr=Array.isArray(d.semRegisto)?d.semRegisto:[];
   if(sr.length){
-    h+='<div class="aviso"><b>Nunca registaram uma chamada:</b> '
+    h+='<div class="aviso sec-a"><b>Nunca registaram uma chamada:</b> '
       + sr.map(function(x){return esc(x.funcao)+(x.app?' <span class="t-mu">('+esc(x.app)+')</span>':'');}).join(', ')
       + '. Pode ser só falta de uso — ou o deploy dessa Edge Function ainda sem a '
       + '<code>registarIaUso()</code>. Sem esta lista, as duas coisas eram o mesmo silêncio.</div>';
   }
-  h+='</div>';
   document.getElementById('rs-apps').innerHTML=h;
 
-  /* ── Por funcionalidade, um cartão por app ──
-     Ordenadas pelo custo MÉDIO por uso — é a pergunta "isto devia ser
-     premium?". O total e o peso na app vêm logo a seguir, porque uma
-     funcionalidade cara que ninguém usa pesa menos do que uma barata que
-     corre cem vezes por dia. O "Recusado à entrada" vai sempre para o fim:
-     não é uma funcionalidade, é o pedido que nem chegou a ser uma. */
+  /* ── Um cartão por funcionalidade, de TODAS as apps ──
+     A mais cara por uso primeiro: é aqui que se vê o que pode ser premium
+     sem ter de abrir app a app. Só as RS_TOPO primeiras, e o resto a um
+     toque — vinte cartões de seguida enterravam o resto do ecrã. A entrada
+     não entra: não é uma funcionalidade (está na ficha de cada app). */
+  const todas=[];
+  for(let i=0;i<RS_ATIVAS.length;i++){
+    const fs=RS_ATIVAS[i]._fs;
+    for(let k=0;k<fs.length;k++)if(fs[k].chave!=='entrada')todas.push({i:i,k:k,f:fs[k]});
+  }
+  todas.sort(function(a,b){return rsPorMedio(a.f,b.f);});
+  const maxM=rsMedioMax(todas.map(function(o){return o.f;}));
+  const mostrar=RS_TODAS?todas:todas.slice(0,RS_TOPO);
   let hf='';
-  for(let i=0;i<ativas.length;i++){
-    const x=ativas[i],fs=rsJuntarEntradas(Array.isArray(x.funcionalidades)?x.funcionalidades:[]);
-    const tApp=rsEur(x,'custoEur','estimadoEur').v||0;
-    fs.sort(function(a,b){
-      const ea=a.chave==='entrada',eb=b.chave==='entrada';
-      if(ea!==eb)return ea?1:-1;
-      const ma=rsEur(a,'medioEur','medioEstEur').v,mb=rsEur(b,'medioEur','medioEstEur').v;
-      if((mb||0)!==(ma||0))return (mb||0)-(ma||0);
-      return Number(b.usos)-Number(a.usos);
-    });
-    let maxM=0;
-    for(let k=0;k<fs.length;k++){const m=rsEur(fs[k],'medioEur','medioEstEur').v;if(m>maxM)maxM=m;}
-    hf+='<div class="card"><h2>'+esc(x.app)+' <span class="h2-s">· por funcionalidade</span></h2>';
-    for(let k=0;k<fs.length;k++){
-      const f=fs[k],m=rsEur(f,'medioEur','medioEstEur'),t=rsEur(f,'custoEur','estimadoEur');
-      const entrada=f.chave==='entrada';
-      const peso=tApp>0&&t.v!=null?t.v/tApp:null;
-      hf+='<div class="fn'+(entrada?' fn-ent':'')+'">'
-        + '<div class="fn-l"><div class="fn-t">'+esc(f.nome)+'</div>'
-        +   '<div class="fn-s">'+esc(f.funcao)+' · '+nFmt(f.usos)+' uso'+(Number(f.usos)===1?'':'s')
-        +     (Number(f.erro)>0?' · <span class="t-er">'+nFmt(f.erro)+' erro'+(Number(f.erro)===1?'':'s')+'</span>':'')
-        +     (Number(f.vazios)>0?' · <span class="t-wn">'+nFmt(f.vazios)+' vazio'+(Number(f.vazios)===1?'':'s')+'</span>':'')
-        +     (Number(f.pesquisas)>0?' · '+nFmt(f.pesquisas)+' c/ pesquisa':'')
-        +     (Number(f.serper)>0?' · '+nFmt(f.serper)+' consulta'+(Number(f.serper)===1?'':'s')+' Serper':'')
-        +     (f.tokensMedios!=null?' · ~'+nFmt(f.tokensMedios)+' tokens':'')
-        +   '</div>'
-        +   (entrada?'':'<div class="bar"><i style="width:'+(maxM>0&&m.v!=null?(m.v/maxM*100).toFixed(1):0)+'%"></i></div>')
-        + '</div>'
-        + '<div class="fn-v">'
-        +   (entrada||m.v==null
-              ?'<div class="fn-e eur-nd">—</div><div class="fn-d">sem usos conseguidos</div>'
-              :'<div class="fn-e '+m.cls+'">'+esc(eurFmt(m.v,4))+'</div><div class="fn-d">por uso</div>')
-        +   '<div class="fn-d">total '+esc(eurFmt(t.v,2))+(peso!=null&&!entrada?' · '+Math.round(peso*100)+'%':'')
-        +     (f.provisorio&&cal?' <span class="tag wn">prov.</span>':'')+'</div>'
-        + '</div></div>';
+  if(todas.length){
+    hf+='<div class="sec-h"><h2>Funcionalidades</h2><span>da mais cara por uso</span></div><div class="cards">';
+    for(let j=0;j<mostrar.length;j++){
+      const o=mostrar[j];
+      hf+=rsCartaoFunc(RS_ATIVAS[o.i],o.f,maxM,true,'rsAbrirFunc('+o.i+','+o.k+')');
     }
     hf+='</div>';
-  }
-  if(ativas.length){
-    hf+='<p class="nota" style="padding:0 4px">O <b>custo médio</b> é por uso '
-      + '<b>conseguido</b>: o total da funcionalidade — os erros que se pagaram incluídos, '
-      + 'como o 200 vazio — a dividir pelas chamadas que correram bem. É o que custa, '
-      + 'de facto, conseguir uma resposta. A barra compara-a com a mais cara da mesma app. '
+    if(todas.length>RS_TOPO){
+      hf+='<button class="sec mais" onclick="rsVerTodas()">'
+        + (RS_TODAS?'Mostrar só as '+RS_TOPO+' mais caras':'Ver as '+todas.length+' funcionalidades')+'</button>';
+    }
+    hf+='<p class="nota sec-n">O <b>custo por uso</b> é por uso <b>conseguido</b>: o total da '
+      + 'funcionalidade — os erros que se pagaram incluídos, como o 200 vazio — a dividir '
+      + 'pelas chamadas que correram bem. É o que custa, de facto, conseguir uma resposta. '
       + 'Com poucos usos, a média é só um indício: conta os usos antes de decidir.</p>';
   }
   document.getElementById('rs-funcs').innerHTML=hf;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   A FICHA DE UMA APP OU DE UMA FUNCIONALIDADE
+   ══════════════════════════════════════════════════════════════════
+   Sobe de baixo, como a ficha de um registo. É uma pilha: da app entra-se
+   numa funcionalidade e o "‹" volta à app; de uma chamada abre-se a ficha
+   do registo POR CIMA desta, e o Escape fecha uma de cada vez.
+
+   Os números de cima vêm do `resumo_apps` (os mesmos dos cartões). O
+   gráfico e as últimas chamadas vêm das CHAMADAS da app (`custos`), que só
+   se pedem quando a ficha abre — e só até 1000: se a janela tiver mais, o
+   gráfico diz desde quando conta, em vez de mostrar um começo que não
+   houve. */
+let RS_PILHA=[];
+let RS_LINHAS={};    // app|dias → Promise das chamadas da app nesta janela
+let RS_CHAMADAS=[];  // as que a ficha está a listar (o índice é o do onclick)
+let RS_NLISTA=20;
+const RS_LIMITE=1000;
+const DIA_MS=86400000;
+
+function rsAbrirApp(i){RS_PILHA=[{i:i}];rsFicha();abrirModal('modal-rs');}
+function rsAbrirFunc(i,k,dentro){
+  if(dentro)RS_PILHA.push({i:i,k:k});else RS_PILHA=[{i:i,k:k}];
+  RS_NLISTA=20;rsFicha();abrirModal('modal-rs');
+}
+function rsVoltar(){if(RS_PILHA.length>1){RS_PILHA.pop();rsFicha();}}
+
+function rsLinhas(app){
+  const ch=app+'|'+RS_DIAS;
+  if(!RS_LINHAS[ch]){
+    RS_LINHAS[ch]=iaRpc('custos',{p_limite:RS_LIMITE,p_app:app,
+        p_desde:new Date(Date.now()-RS_DIAS*DIA_MS).toISOString()})
+      .then(function(l){
+        l=Array.isArray(l)?l:[];
+        // `pedido` é o "ia começar" da `importar-vinhos`, não uma chamada —
+        // o `resumo_apps` também não o conta.
+        return {cheio:l.length>=RS_LIMITE,linhas:l.filter(function(r){return r.estado!=='pedido';})};
+      })
+      .catch(function(e){delete RS_LINHAS[ch];throw e;});
+  }
+  return RS_LINHAS[ch];
+}
+
+/* A funcionalidade de uma chamada é a que ela GRAVOU (o histórico também
+   está gravado na coluna desde 11/10/2026 — ver `db/funcionalidades.sql`).
+   Não se volta a deduzir aqui: a regra é da BD, e duas cópias dela eram
+   duas respostas. */
+function rsFuncDe(r){return r.funcionalidade||((r.detalhe||{}).funcionalidade)||null;}
+function rsDaFunc(r,f){
+  if(rsFuncDe(r)!==f.chave)return false;
+  if(f.chave==='entrada')return String(f.funcao).split(', ').indexOf(r.funcao)>=0;
+  return r.funcao===f.funcao;
+}
+
+function rsFicha(){
+  const topo=RS_PILHA[RS_PILHA.length-1];if(!topo)return;
+  const x=RS_ATIVAS[topo.i];if(!x)return;
+  const f=topo.k==null?null:x._fs[topo.k];
+  const volta=document.getElementById('rs-sh-volta');
+  volta.style.display=RS_PILHA.length>1?'':'none';
+  volta.setAttribute('aria-label','Voltar a '+x.app);
+  document.getElementById('rs-sh-titulo').textContent=f?f.nome:x.app;
+  document.getElementById('rs-sh-sub').textContent=
+    (f?x.app+' · '+f.funcao:'app')+' · últimos '+RS_DIAS+' dias';
+  document.getElementById('rs-sh-corpo').innerHTML=f?rsFichaFunc(x,f):rsFichaApp(x,topo.i);
+  const mb=document.querySelector('#modal-rs .mbox');if(mb)mb.scrollTop=0;
+  rsLinhas(x.app).then(function(res){
+    if(RS_PILHA[RS_PILHA.length-1]!==topo)return;   // entretanto mudou de ficha
+    rsFichaChamadas(f,res);
+  },function(e){
+    if(RS_PILHA[RS_PILHA.length-1]!==topo)return;
+    const g=document.getElementById('rs-sh-graf');
+    if(g)g.innerHTML='<div class="aviso erro">'+esc(e.message)+'</div>';
+    const l=document.getElementById('rs-sh-lista');if(l)l.innerHTML='';
+  });
+}
+
+function rsKpi(rotulo,valor,cls,sub){
+  return '<div class="kpi"><div class="kpi-l">'+esc(rotulo)+'</div>'
+    + '<div class="kpi-v '+(cls||'')+'">'+valor+'</div>'
+    + (sub?'<div class="kpi-s">'+sub+'</div>':'')+'</div>';
+}
+
+/* Correu bem / erro, numa barra só. O 200 vazio NÃO é um terceiro bocado:
+   o histórico gravou-o como `ok` e as functions novas como `erro`, e o
+   agregado não os separa — diz-se ao lado, a âmbar, quantos foram. */
+function rsEstadoHtml(x){
+  const ok=Number(x.ok||0),er=Number(x.erro||0),vz=Number(x.vazios||0);
+  if(!(ok+er))return '';
+  return '<div class="est"><div class="est-b">'
+    + (ok?'<i class="ok" style="flex-grow:'+ok+'"></i>':'')
+    + (er?'<i class="er" style="flex-grow:'+er+'"></i>':'')
+    + '</div><div class="est-l">'
+    +   '<span><b class="k ok"></b>'+nFmt(ok)+' ok</span>'
+    +   (er?'<span><b class="k er"></b>'+nFmt(er)+' erro'+(er===1?'':'s')+'</span>':'')
+    +   (vz?'<span><b class="k wn"></b>'+nFmt(vz)+' com o 200 vazio</span>':'')
+    + '</div></div>';
+}
+
+function rsFichaApp(x,i){
+  const cal=!!(RS_APPS&&RS_APPS.calibrado);
+  const e=rsEur(x,'custoEur','estimadoEur');
+  const quota=RS_TOTAL>0&&e.v!=null?e.v/RS_TOTAL:null;
+  const medio=Number(x.ok)>0&&e.v!=null?e.v/Number(x.ok):null;
+  const fs=x._fs.filter(function(f){return f.chave!=='entrada';});
+  let h='<div class="kpis">'
+    + rsKpi(cal?'Gasto medido':'Gasto estimado',esc(eurFmt(e.v,2)),e.cls,
+            quota!=null?Math.round(quota*100)+'% do total':'')
+    + rsKpi('Por uso',medio!=null?esc(eurFmt(medio,4)):'—',e.cls,'conseguido')
+    + rsKpi('Usos',nFmt(x.usos),'','última '+esc(desdeFmt(x.ultimaChamada)))
+    + rsKpi('Funcionalidades',nFmt(fs.length),'',
+            Number(x.serper)>0?nFmt(x.serper)+' consultas ao Serper':'')
+    + '</div>'
+    + rsEstadoHtml(x);
+  h+='<h3 class="sh-h">'+(cal?'Custo':'Custo estimado')+' por '+(RS_DIAS>30?'semana':'dia')+'</h3>'
+    + '<div id="rs-sh-graf"><div class="vazio-msg">a carregar…</div></div>'
+    + '<h3 class="sh-h">Funcionalidades <span>da mais cara por uso</span></h3>';
+  const maxM=rsMedioMax(fs);
+  h+='<div class="cards">';
+  for(let k=0;k<x._fs.length;k++){
+    const f=x._fs[k];
+    if(f.chave==='entrada')continue;
+    h+=rsCartaoFunc(x,f,maxM,false,'rsAbrirFunc('+i+','+k+',true)');
+  }
+  h+='</div>';
+  for(let k=0;k<x._fs.length;k++){
+    const f=x._fs[k];
+    if(f.chave!=='entrada')continue;
+    h+='<button class="ent" onclick="rsAbrirFunc('+i+','+k+',true)">'
+      + '<span class="ent-t">Recusado à entrada · '+nFmt(f.usos)+' pedido'+(Number(f.usos)===1?'':'s')+'</span>'
+      + '<span class="ent-s">Não chegaram ao Gemini, não gastaram tokens · '+esc(f.funcao)+'</span></button>';
+  }
+  h+='<button class="sec" onclick="rsVerRegistos('+i+')">Ver os registos da '+esc(x.app)+'</button>';
+  return h;
+}
+
+function rsFichaFunc(x,f){
+  const cal=!!(RS_APPS&&RS_APPS.calibrado);
+  const m=rsEur(f,'medioEur','medioEstEur'),t=rsEur(f,'custoEur','estimadoEur');
+  const entrada=f.chave==='entrada';
+  const peso=x._tot>0&&t.v!=null?t.v/x._tot:null;
+  let h='<div class="kpis">';
+  if(entrada){
+    h+=rsKpi('Pedidos',nFmt(f.usos),'','recusados antes do modelo')
+      + rsKpi('Tokens','0','','nada a repartir');
+  }else{
+    h+=rsKpi('Por uso',m.v==null?'—':esc(eurFmt(m.v,4)),m.cls,m.v==null?'sem usos conseguidos':'conseguido')
+      + rsKpi('Total',esc(eurFmt(t.v,2)),t.cls,peso!=null?Math.round(peso*100)+'% da '+esc(x.app):'')
+      + rsKpi('Usos',nFmt(f.usos),'',nFmt(f.ok)+' ok')
+      + rsKpi('Tokens por uso',f.tokensMedios!=null?'~'+nFmt(f.tokensMedios):'—','','em média, nos ok');
+  }
+  h+='</div>'+rsEstadoHtml(f);
+  if(entrada){
+    h+='<p class="nota">Pedidos que a Edge Function recusou à porta — sem sessão, sem plano, '
+      + 'um erro antes de chamar o modelo. Não chegaram a ser uma funcionalidade, e por isso '
+      + 'não entram na média de nenhuma.</p>';
+  }
+  h+='<dl class="kv">'
+    + '<dt>Edge Function</dt><dd>'+esc(f.funcao)+'</dd>'
+    + (Number(f.pesquisas)>0?'<dt>Pesquisa Google</dt><dd>'+nFmt(f.pesquisas)+' de '+nFmt(f.usos)+' usos</dd>':'')
+    + (Number(f.serper)>0?'<dt>Serper</dt><dd>'+nFmt(f.serper)+' consulta'+(Number(f.serper)===1?'':'s')
+        +' Serper — pagas à parte, fora deste euro</dd>':'')
+    + (cal&&f.maxEur!=null&&!entrada?'<dt>A mais cara</dt><dd>'+esc(eurFmt(f.maxEur,4))+'</dd>':'')
+    + '<dt>Última</dt><dd>'+esc(diaHoraFmt(f.ultimaChamada))+' · '+esc(desdeFmt(f.ultimaChamada))+'</dd>'
+    + (f.provisorio&&cal?'<dt>Provisório</dt><dd>parte do custo ainda espera por uma leitura</dd>':'')
+    + '</dl>';
+  if(!entrada&&Number(f.ok)>0&&Number(f.ok)<5){
+    h+='<div class="aviso">Só <b>'+nFmt(f.ok)+'</b> uso'+(Number(f.ok)===1?'':'s')+' conseguido'
+      + (Number(f.ok)===1?'':'s')+' nesta janela: a média ainda é um indício, não um preço.</div>';
+  }
+  if(!entrada){
+    h+='<h3 class="sh-h">'+(cal?'Custo':'Custo estimado')+' por '+(RS_DIAS>30?'semana':'dia')+'</h3>'
+      + '<div id="rs-sh-graf"><div class="vazio-msg">a carregar…</div></div>';
+  }
+  h+='<h3 class="sh-h">Últimas chamadas</h3>'
+    + '<div id="rs-sh-lista"><div class="vazio-msg">a carregar…</div></div>';
+  return h;
+}
+
+/* O que só as chamadas sabem: o gráfico e, numa funcionalidade, a lista. */
+function rsFichaChamadas(f,res){
+  const cal=!!(RS_APPS&&RS_APPS.calibrado);
+  const linhas=f?res.linhas.filter(function(r){return rsDaFunc(r,f);}):res.linhas;
+  const g=document.getElementById('rs-sh-graf');
+  if(g)rsGrafDesenhar(g,linhas,cal,res.cheio);
+  RS_CHAMADAS=linhas;
+  rsListaDesenhar();
+}
+
+function rsListaDesenhar(){
+  const el=document.getElementById('rs-sh-lista');if(!el)return;
+  if(!RS_CHAMADAS.length){el.innerHTML='<div class="vazio-msg">Nenhuma chamada nesta janela.</div>';return;}
+  let h='';
+  const n=Math.min(RS_NLISTA,RS_CHAMADAS.length);
+  for(let j=0;j<n;j++)h+=rgLinhaHtml(RS_CHAMADAS[j],'rsAbrirChamada('+j+')');
+  if(RS_CHAMADAS.length>n){
+    h+='<button class="sec" onclick="rsMaisChamadas()">Mostrar mais ('+nFmt(RS_CHAMADAS.length-n)+')</button>';
+  }
+  el.innerHTML=h;
+}
+function rsMaisChamadas(){RS_NLISTA+=30;rsListaDesenhar();}
+function rsAbrirChamada(j){rgFicha(RS_CHAMADAS[j]);}
+
+/* Da ficha de uma app para os Registos, já filtrados por ela. O seletor
+   enche-se aqui com as apps todas — senão ficava só com esta, e o "todas"
+   deixava de ter as outras para escolher. */
+function rsVerRegistos(i){
+  const x=RS_ATIVAS[i];if(!x)return;
+  const sel=document.getElementById('rg-app');
+  const nomes=((RS_APPS&&RS_APPS.apps)||[]).map(function(a){return a.app;}).sort();
+  for(let k=0;k<nomes.length;k++){
+    let tem=false;
+    for(let j=0;j<sel.options.length;j++)if(sel.options[j].value===nomes[k])tem=true;
+    if(tem)continue;
+    const o=document.createElement('option');o.value=nomes[k];o.textContent=nomes[k];sel.appendChild(o);
+  }
+  sel.dataset.cheio='1';
+  sel.value=x.app;
+  fecharModal('modal-rs');
+  itab('registos');
+}
+
+/* ── O gráfico: o custo por dia (por semana na janela de 90) ──
+   Uma série só, por isso sem legenda — o título diz o que é. A parte
+   PROVISÓRIA de cada coluna vai por cima, a âmbar, e só aí aparece a
+   legenda. Sem calibração as colunas são a estimativa, a cinzento: a cor
+   diz o mesmo que diz no resto do painel.
+   O valor de cada coluna lê-se ao tocar (ou ao passar o rato) na linha
+   por cima; por defeito ela diz qual foi o dia mais caro. */
+function rsGrafBins(linhas,cal){
+  const passo=RS_DIAS>30?7:1;
+  const fim=new Date();fim.setHours(24,0,0,0);
+  const n=Math.ceil((RS_DIAS+1)/passo);
+  const bins=[];
+  for(let k=0;k<n;k++){
+    const ate=fim.getTime()-(n-1-k)*passo*DIA_MS;
+    bins.push({de:ate-passo*DIA_MS,ate:ate,firme:0,prov:0,usos:0});
+  }
+  for(let j=0;j<linhas.length;j++){
+    const r=linhas[j],t=Date.parse(r.criado_em);
+    if(isNaN(t))continue;
+    // Fora das colunas não se encosta à primeira: era inventar-lhe um dia.
+    const b=bins[n-1-Math.floor((fim.getTime()-t)/(passo*DIA_MS))];if(!b)continue;
+    b.usos++;
+    const v=cal?r.custo_eur:r.custo_estimado_eur;
+    if(v==null)continue;
+    if(cal&&r.provisorio)b.prov+=Number(v);else b.firme+=Number(v);
+  }
+  return {bins:bins,passo:passo};
+}
+
+function rsBinFmt(b,passo){
+  const f=function(ms){return new Date(ms).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'});};
+  return passo===1?f(b.de):f(b.de)+'–'+f(b.ate-1);
+}
+
+function rsGrafDesenhar(el,linhas,cal,cheio){
+  const g=rsGrafBins(linhas,cal),bins=g.bins;
+  let max=0,top=-1,temProv=false;
+  for(let k=0;k<bins.length;k++){
+    const v=bins[k].firme+bins[k].prov;
+    if(v>max){max=v;top=k;}
+    if(bins[k].prov>0)temProv=true;
+  }
+  let h='<div class="gr'+(cal?'':' gr-est')+'">'
+    + '<div class="gr-r" aria-live="polite"></div><div class="gr-p">';
+  for(let k=0;k<bins.length;k++){
+    const b=bins[k],v=b.firme+b.prov;
+    const alt=max>0?Math.max(v>0?3:0,v/max*100):0;
+    h+='<div class="gr-c" data-k="'+k+'" tabindex="0">'
+      + (alt>0?'<div class="gr-b" style="height:'+alt.toFixed(1)+'%">'
+          // Em PERCENTAGEM: um `flex-grow` que some menos de 1 só enche essa
+          // fração da coluna, e os cêntimos somam sempre menos de 1.
+          + (b.prov>0?'<i class="pv" style="flex-grow:'+(b.prov/v*100).toFixed(2)+'"></i>':'')
+          + (b.firme>0?'<i style="flex-grow:'+(b.firme/v*100).toFixed(2)+'"></i>':'')
+          + '</div>':'')
+      + '</div>';
+  }
+  h+='</div><div class="gr-x"><span>'+esc(rsBinFmt(bins[0],g.passo))+'</span><span>hoje</span></div>';
+  if(temProv){
+    h+='<div class="gr-lg"><span><b class="k"></b>medido</span><span><b class="k wn"></b>provisório</span></div>'
+      + '<p class="nota gr-nota">O <b>provisório</b> são chamadas ainda sem uma janela de saldo fechada: '
+      + 'levam o fator da mais próxima até haver uma leitura nova.</p>';
+  }
+  if(cheio){
+    let mais=null;
+    for(let j=0;j<linhas.length;j++){const t=Date.parse(linhas[j].criado_em);if(mais==null||t<mais)mais=t;}
+    h+='<p class="nota gr-nota">A app tem mais de '+nFmt(RS_LIMITE)+' chamadas nesta janela e só '
+      + 'vêm as '+nFmt(RS_LIMITE)+' mais recentes: antes de '+esc(mais!=null?diaHoraFmt(new Date(mais).toISOString()):'—')
+      + ' o gráfico não sabe.</p>';
+  }
+  h+='</div>';
+  el.innerHTML=h;
+
+  const ro=el.querySelector('.gr-r'),pl=el.querySelector('.gr-p');
+  const defeito=function(){
+    pl.classList.remove('foco');
+    const on=pl.querySelector('.gr-c.on');if(on)on.classList.remove('on');
+    if(top<0){ro.textContent=linhas.length?nFmt(linhas.length)+' chamadas, sem euro nenhum.':'Sem chamadas nesta janela.';return;}
+    ro.innerHTML='Mais caro: <b>'+esc(rsBinFmt(bins[top],g.passo))+'</b> · '+esc(eurFmt(max,4))
+      + ' · '+nFmt(bins[top].usos)+' chamada'+(bins[top].usos===1?'':'s');
+  };
+  const mostrar=function(c){
+    if(!c)return;
+    const k=Number(c.dataset.k),b=bins[k];if(!b)return;
+    const on=pl.querySelector('.gr-c.on');if(on&&on!==c)on.classList.remove('on');
+    c.classList.add('on');pl.classList.add('foco');
+    ro.innerHTML='<b>'+esc(rsBinFmt(b,g.passo))+'</b> · '+esc(eurFmt(b.firme+b.prov,4))
+      + ' · '+nFmt(b.usos)+' chamada'+(b.usos===1?'':'s')
+      + (b.prov>0?' · <span class="t-wn">'+esc(eurFmt(b.prov,4))+' provisório</span>':'');
+  };
+  const alvo=function(ev){return ev.target&&ev.target.closest?ev.target.closest('.gr-c'):null;};
+  pl.addEventListener('pointerdown',function(ev){mostrar(alvo(ev));});
+  pl.addEventListener('pointermove',function(ev){if(ev.pointerType==='mouse')mostrar(alvo(ev));});
+  pl.addEventListener('pointerleave',function(ev){if(ev.pointerType==='mouse')defeito();});
+  pl.addEventListener('focusin',function(ev){mostrar(alvo(ev));});
+  pl.addEventListener('focusout',defeito);
+  defeito();
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -633,27 +1020,35 @@ function rgDesenhar(){
     if(filtro==='vazio'&&!vazio)continue;
     if(filtro&&filtro!=='vazio'&&r.estado!==filtro)continue;
     n++;
-    const cls=vazio?'vazio':(r.estado==='erro'?'erro':(r.estado==='ok'?'ok':'pedido'));
-    const toks=Number(r.tokens_entrada||0)+Number(r.tokens_saida||0)+Number(r.tokens_pensamento||0);
-    h+='<button class="rlin '+cls+'" onclick="rgAbrir('+i+')">'
-      + '<div class="rlin-m">'
-      +   '<div class="rlin-t">'+esc(r.app)+' · '+esc(r.funcao)
-      +     (vazio?'<span class="tag wn">200 vazio</span>':'')
-      +     (r.estado==='erro'?'<span class="tag er">erro</span>':'')+'</div>'
-      +   '<div class="rlin-s">'+esc(r.modelo||'(sem modelo)')+' · '+nFmt(toks)+' tokens'
-      +     (r.provisorio&&r.custo_eur!=null?' · provisório':'')+'</div>'
-      + '</div>'
-      + '<div class="rlin-v">'
-      +   '<div class="rlin-e">'+(r.custo_eur==null
-            ?'<span class="eur-nd">—</span>':esc(eurFmt(r.custo_eur,4)))+'</div>'
-      +   '<div class="rlin-d">'+esc(dtFmt(r.criado_em))+'</div>'
-      + '</div></button>';
+    h+=rgLinhaHtml(r,'rgAbrir('+i+')');
   }
   el.innerHTML=n?h:'<div class="vazio-msg">Nada a mostrar com este filtro.</div>';
 }
 
-function rgAbrir(i){
-  const r=RG_LINHAS[i];if(!r)return;
+/* Uma linha da lista. É a mesma aqui e nas últimas chamadas da ficha de
+   uma funcionalidade (Resumo): o 200 vazio tem de se ler igual nas duas. */
+function rgLinhaHtml(r,onclick){
+  const vazio=ehVazio(r);
+  const cls=vazio?'vazio':(r.estado==='erro'?'erro':(r.estado==='ok'?'ok':'pedido'));
+  const toks=Number(r.tokens_entrada||0)+Number(r.tokens_saida||0)+Number(r.tokens_pensamento||0);
+  return '<button class="rlin '+cls+'" onclick="'+onclick+'">'
+    + '<div class="rlin-m">'
+    +   '<div class="rlin-t">'+esc(r.app)+' · '+esc(r.funcao)
+    +     (vazio?'<span class="tag wn">200 vazio</span>':'')
+    +     (r.estado==='erro'?'<span class="tag er">erro</span>':'')+'</div>'
+    +   '<div class="rlin-s">'+esc(r.modelo||'(sem modelo)')+' · '+nFmt(toks)+' tokens'
+    +     (r.provisorio&&r.custo_eur!=null?' · provisório':'')+'</div>'
+    + '</div>'
+    + '<div class="rlin-v">'
+    +   '<div class="rlin-e">'+(r.custo_eur==null
+          ?'<span class="eur-nd">—</span>':esc(eurFmt(r.custo_eur,4)))+'</div>'
+    +   '<div class="rlin-d">'+esc(dtFmt(r.criado_em))+'</div>'
+    + '</div></button>';
+}
+
+function rgAbrir(i){rgFicha(RG_LINHAS[i]);}
+function rgFicha(r){
+  if(!r)return;
   document.getElementById('mr-titulo').textContent=r.app+' · '+r.funcao;
   const vazio=ehVazio(r);
   const fr=(r.detalhe||{}).finishReason;
@@ -1169,7 +1564,12 @@ async function sbInit(){
 }
 
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape')fecharModal('modal-registo');
+  if(e.key!=='Escape')return;
+  /* Uma de cada vez: a ficha de um registo abre POR CIMA da de uma
+     funcionalidade, e o Escape fecha só a de cima. */
+  const r=document.getElementById('modal-registo');
+  if(r&&r.classList.contains('on'))fecharModal('modal-registo');
+  else fecharModal('modal-rs');
 });
 
 /* Sem zoom. O `user-scalable=no` do viewport chega no Android, mas o

@@ -159,16 +159,31 @@ code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;
 .eur-est{color:var(--mu);font-weight:400}
 .eur-nd{color:var(--mu)}          /* não calibrado: não há número a dar */
 
-/* ── O bloco de topo do Resumo ── */
-.topo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-.tbox{
-  background:var(--card);border:1px solid var(--ln);border-radius:14px;
-  box-shadow:var(--sh);padding:14px 16px;
+/* ── O número grande do Resumo ──
+   Grafite porque o euro MEDIDO é o grafite do sistema — é a afirmação
+   firme, e é a única coisa do ecrã que pode ser assim tão grande. A
+   estimativa vai por baixo a branco apagado: é o cinzento deste fundo.
+   Números grandes SEM `tabular-nums`: sozinhos, os dígitos todos da largura
+   do zero ficam a parecer soltos. O `tabular-nums` é para colunas. */
+.hero{
+  background:var(--ink);color:#fff;border-radius:20px;padding:18px 18px 16px;
+  margin-bottom:6px;box-shadow:0 1px 2px rgba(28,36,48,.12),0 10px 28px rgba(28,36,48,.18);
 }
-.tbox .tl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
-.tbox .tv{font-size:26px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-.tbox .ts{font-size:12px;color:var(--mu);margin-top:2px}
-.tbox.alt .tv{font-size:20px;font-weight:600;color:var(--mu)}
+.hero-l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+.hero-v{font-size:48px;font-weight:700;letter-spacing:-.025em;line-height:1.05;margin-top:6px}
+.hero-nd{color:rgba(255,255,255,.4)}
+.hero-s{display:flex;flex-wrap:wrap;gap:0 6px;font-size:12.5px;color:rgba(255,255,255,.7);margin-top:6px}
+.hero-s span{white-space:nowrap}
+.hero-s span+span::before{content:"·";margin-right:6px}
+.hero-est{margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.14)}
+.hero-er{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 12px;margin-top:3px}
+.hero-ev{font-size:19px;font-weight:500;color:rgba(255,255,255,.6)}
+.hero-dv{font-size:12px;color:rgba(255,255,255,.6)}
+
+/* Ao mudar de janela, o que já lá estava fica a meia tinta até chegar o
+   novo — em vez de piscar e saltar de altura. */
+#t-resumo.a-carregar #rs-topo,#t-resumo.a-carregar #rs-apps,#t-resumo.a-carregar #rs-funcs,
+#t-resumo.a-carregar #rs-modelos,#t-resumo.a-carregar #rs-catalogo{opacity:.45;transition:opacity .15s}
 
 /* ── Avisos ──
    Âmbar é "não sei ainda", vermelho é "está mal". Não os troques: um
@@ -210,29 +225,138 @@ tr:last-child td{border-bottom:none}
 .t-app{font-weight:600;white-space:nowrap}
 .t-sub{display:block;color:var(--mu);font-size:11.5px;font-family:inherit}
 
-/* ── Por app e por funcionalidade ──
-   LISTAS e não tabelas, pela razão das janelas do saldo: os nomes das
-   funcionalidades são compridos e numa tabela empurravam o euro para trás
-   do scroll lateral. Aqui o euro fica sempre à direita, à vista.
+/* ── Por app e por funcionalidade: CARTÕES ──
+   Uma grelha que se arruma sozinha — dois por linha no telemóvel, quatro
+   no ecrã largo. Cada cartão é um BOTÃO e abre a ficha; repõe-se o
+   alinhamento e o texto pela razão da `.rlin` (não há regra global de
+   botão, mas um botão traz os seus próprios defeitos).
+   O `:hover` só existe onde há rato (`hover:hover`): no telemóvel ficava
+   colado depois do toque.
    A barra é GRAFITE: é a mesma afirmação do euro medido (quanto pesa), não
    uma cor nova. Não lhe dês outra. */
-.ap,.fn{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--ln)}
-.card h2+.nota+.ap,.card h2+.fn{border-top:none}
-.ap-l,.fn-l{flex:1 1 auto;min-width:0}
-.ap-t{font-weight:600;font-size:14px}
-.fn-t{font-weight:600;font-size:13.5px;line-height:1.35}
-.ap-s,.fn-s{color:var(--mu);font-size:11.5px;margin-top:1px;font-variant-numeric:tabular-nums}
-.ap-v,.fn-v{flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums}
-.ap-e{font-size:15px}
-.fn-e{font-size:14.5px}
-.ap-p,.fn-d{font-size:11px;color:var(--mu);white-space:nowrap}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:22px 4px 10px}
+.sec-h h2{margin:0;font-size:17px;letter-spacing:-.01em}
+.sec-h span{font-size:12px;color:var(--mu);text-align:right}
+.sec-n{margin:10px 4px 0}
+.sec-a{margin:12px 0 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px}
+.cd{
+  display:flex;flex-direction:column;align-items:stretch;min-width:0;
+  text-align:left;text-transform:none;letter-spacing:normal;font:inherit;color:var(--ink);
+  background:var(--card);border:1px solid var(--ln);border-radius:16px;box-shadow:var(--sh);
+  padding:14px 14px 12px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:transform .12s ease,border-color .12s ease;
+}
+.cd:active{transform:scale(.98)}
+.cd:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+@media(hover:hover){.cd:hover{border-color:#c9d0d7}}
+.cd-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cd-n{font-weight:700;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-p{font-size:12px;color:var(--mu);font-variant-numeric:tabular-nums}
+.cd-e{font-size:25px;letter-spacing:-.015em;line-height:1.15;margin-top:8px}
+.cd-a{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin-bottom:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Duas linhas e o resto cortado: os nomes das funcionalidades são
+   compridos, e cartões de alturas diferentes desalinhavam a grelha. O nome
+   inteiro está na ficha. */
+.cd-t{font-weight:600;font-size:13px;line-height:1.3;min-height:2.6em;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cd-fe{font-size:20px;letter-spacing:-.01em;line-height:1.15;margin-top:8px}
+.cd-u{font-size:11px;color:var(--mu)}
+.cd-s{font-size:11.5px;color:var(--mu);margin-top:6px;line-height:1.35}
+.cd-s+.cd-s{margin-top:1px}
+.cd-f{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.cd-f .tag{margin-left:0}
+.cd .bar{margin-top:10px}
+.mais{margin-top:10px}
 .bar{height:4px;background:#eef0f3;border-radius:999px;margin-top:6px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--ink);border-radius:999px;min-width:2px}
-.fn-ent .fn-t{font-weight:500;color:var(--mu)}
-.ap-cal{margin:10px 0 0}
-.h2-s{font-weight:400;color:var(--mu);font-size:13px}
+/* A barra de um euro ESTIMADO é cinzenta, como o número dela. */
+.bar.est i{background:#a3adb8}
+/* Os modelos: os nomes são compridos ("gemini-flash-lite-latest"), por
+   isso um por linha no telemóvel. Não abrem ficha — não são botões. */
+.cards-l{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.cd-st{cursor:default}
+.cd-st:active{transform:none}
+@media(hover:hover){.cd-st:hover{border-color:var(--ln)}}
+.tk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--ln)}
+.tk span{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.tk b{display:block;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:1px;white-space:nowrap}
+.tk b .tag{font-weight:400;font-style:normal;vertical-align:1px}
+.sec-p{margin:-4px 4px 10px}
+#rs-funcs{margin-bottom:6px}
+.ap-cal{margin-top:8px}
 .t-er{color:var(--er)}
 .t-wn{color:var(--wn)}
+
+/* ── A ficha de uma app ou funcionalidade ──
+   É comprida, e o título com o "‹" e o "×" fica preso em cima enquanto
+   ela rola: sem isso, ao fundo da lista já não se sabia de que app era
+   nem havia por onde voltar. O `top` negativo é o padding da `.mbox`. */
+#modal-rs .mtop{position:sticky;top:-16px;z-index:2;background:var(--card);
+  margin:-16px -16px 10px;padding:16px 16px 10px}
+.mtit-w{flex:1 1 auto;min-width:0}
+.msub{font-size:12px;color:var(--mu);margin-top:2px}
+.mvolta{
+  font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  background:var(--bg);border:none;border-radius:10px;color:var(--ink);
+  font-size:24px;line-height:1;width:34px;height:34px;flex:0 0 auto;padding:0 0 3px;
+}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.kpi{background:var(--bg);border-radius:12px;padding:10px 12px;min-width:0}
+.kpi-l{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.kpi-v{font-size:21px;font-weight:700;letter-spacing:-.01em;margin-top:2px;line-height:1.2}
+.kpi-v.eur-est{font-weight:500}
+.kpi-s{font-size:11.5px;color:var(--mu);margin-top:1px}
+.sh-h{font-size:13.5px;margin:20px 0 8px;letter-spacing:-.005em}
+.sh-h span{font-weight:400;color:var(--mu);font-size:12px}
+#rs-sh-corpo .sec{margin-top:14px}
+#rs-sh-lista .sec{margin-top:4px}
+/* Correu bem / erro numa barra só: as cores de estado, com o nome e a
+   contagem ao lado — nunca a cor sozinha. */
+.est{margin:0 0 14px}
+.est-b{display:flex;gap:2px;height:8px;border-radius:999px;overflow:hidden;background:var(--bg)}
+.est-b i{display:block;min-width:4px}
+.est-b .ok{background:var(--ok)}
+.est-b .er{background:var(--er)}
+.est-l,.gr-lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--mu);margin-top:7px;
+  font-variant-numeric:tabular-nums}
+.k{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;background:var(--ink)}
+.k.ok{background:var(--ok)}
+.k.er{background:var(--er)}
+.k.wn{background:var(--wn)}
+/* A entrada não é uma funcionalidade: fica numa linha apagada no fim. */
+.ent{
+  display:block;width:100%;text-align:left;text-transform:none;letter-spacing:normal;font:inherit;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;margin-top:10px;
+  background:var(--bg);border:1px solid var(--ln);border-radius:12px;padding:10px 12px;color:var(--mu);
+}
+.ent-t{display:block;font-weight:600;font-size:13px;color:var(--ink)}
+.ent-s{display:block;font-size:11.5px}
+
+/* ── O gráfico do custo por dia ──
+   Colunas finas (no máximo 24px) que crescem da linha de base, com 2px de
+   ar entre elas e a ponta arredondada; a base é um fio de cabelo. Uma
+   série só: grafite se é medido, cinzento se é a estimativa, e a parte
+   provisória a âmbar por cima. A coluna tocada fica a cheio e as outras
+   esbatem — é assim que se vê a que a leitura de cima se refere. */
+.gr{margin-bottom:4px}
+.gr-r{font-size:12.5px;color:var(--mu);min-height:1.5em;font-variant-numeric:tabular-nums}
+.gr-r b{color:var(--ink);font-weight:600}
+.gr-p{display:flex;align-items:flex-end;gap:2px;height:104px;margin-top:8px;border-bottom:1px solid var(--ln);
+  touch-action:pan-y}
+.gr-c{flex:1 1 0;min-width:0;height:100%;display:flex;align-items:flex-end;justify-content:center;
+  cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent}
+.gr-b{width:100%;max-width:24px;display:flex;flex-direction:column;gap:2px;
+  border-radius:4px 4px 0 0;overflow:hidden;transition:opacity .12s}
+.gr-b i{display:block;background:var(--ink);min-height:1px}
+.gr-b i.pv{background:var(--wn)}
+.gr-est .gr-b i{background:#a3adb8}
+.gr-p.foco .gr-c:not(.on) .gr-b{opacity:.35}
+.gr-c:focus-visible .gr-b{outline:2px solid var(--ink);outline-offset:1px}
+.gr-x{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mu);margin-top:5px;
+  font-variant-numeric:tabular-nums}
+.gr-nota{margin:8px 0 0}
 
 /* ── Lista de registos ──
    Cada linha é um BOTÃO, e um botão herda o alinhamento e o peso do que
@@ -343,7 +467,6 @@ pre.raw{
 .vazio-msg{color:var(--mu);font-size:13px;padding:16px 4px;text-align:center}
 
 @media(max-width:560px){
-  .topo{grid-template-columns:1fr}
   .modal{padding:0;align-items:flex-end}
   .mbox{max-width:none;border-radius:16px 16px 0 0;max-height:92vh;
         padding-bottom:calc(16px + env(safe-area-inset-bottom))}
