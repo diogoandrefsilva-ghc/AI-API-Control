@@ -66,6 +66,29 @@ function resumo(calibrado){
     janela:{pedidos:7,custoEur:calibrado?0.1923:null,estimadoEur:0.043},
     total:{pedidos:7,custoEur:calibrado?0.1923:null,estimadoEur:0.043}};
 }
+// Por app e por funcionalidade (db/funcionalidades.sql). A splitwisely
+// não chamou nada na janela: tem de aparecer como calada, e sem cartão.
+function resumoApps(calibrado){
+  const f = (o) => Object.assign({erro:0,vazios:0,pesquisas:0,provisorio:false,
+    ultimaChamada:'2026-09-20T14:32:19.117Z',tokensMedios:1500}, o);
+  return {janelaDias:30,calibrado,
+    apps:[
+      {app:'garrafeira',usos:3,ok:2,erro:1,vazios:0,serper:3,custoEur:calibrado?0.0955:null,estimadoEur:0.003,
+       provisorio:false,ultimaChamada:'2026-09-20T14:32:19.117Z',funcionalidades:[
+        f({funcao:'vinho-info',chave:'procurar',nome:'Procurar informação · perguntar à IA',usos:1,ok:1,
+           custoEur:calibrado?0.0318:null,estimadoEur:0.001,medioEur:calibrado?0.0318:null,medioEstEur:0.001,pesquisas:1}),
+        f({funcao:'vinho-info',chave:'sites',nome:'Procurar informação · em sites concretos',usos:1,ok:1,
+           custoEur:calibrado?0.0637:null,estimadoEur:0.002,medioEur:calibrado?0.0637:null,medioEstEur:0.002,serper:3}),
+        f({funcao:'vinho-info',chave:'entrada',nome:'Recusado à entrada',usos:1,ok:0,erro:1,
+           custoEur:calibrado?0:null,estimadoEur:0,medioEur:null,medioEstEur:null,tokensMedios:null})]},
+      {app:'winecatalog',usos:4,ok:3,erro:1,vazios:2,custoEur:calibrado?0.0968:null,estimadoEur:0.04,
+       provisorio:false,ultimaChamada:'2026-09-20T14:18:02.069Z',funcionalidades:[
+        f({funcao:'catalogo-info',chave:'procurar',nome:'Procurar ficha do vinho',usos:4,ok:3,erro:1,vazios:2,
+           custoEur:calibrado?0.0968:null,estimadoEur:0.04,medioEur:calibrado?0.0323:null,medioEstEur:0.0133,pesquisas:4})]},
+      {app:'splitwisely',usos:0,ok:0,erro:0,vazios:0,custoEur:null,estimadoEur:0,provisorio:false,
+       ultimaChamada:'2026-08-01T10:00:00Z',funcionalidades:[]}],
+    semRegisto:[{funcao:'fatura-ocr',app:'festasbv'}]};
+}
 const JANELAS = [
   // A Google atrasou-se: a janela das chamadas deu 0,00 € e a seguinte
   // apareceu com o euro e sem chamadas — o `fatores()` juntou-as.
@@ -121,7 +144,7 @@ const POUPANCA = {
                 body: JSON.stringify({ id: 'u1', email: 'diogo.andre.f.silva@gmail.com' }) }));
   await page.route('**/rest/v1/rpc/*', r => {
     const fn = r.request().url().split('/rpc/')[1].split('?')[0];
-    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), custos: REGISTOS,
+    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos: REGISTOS,
                    janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS,
                    poupanca_catalogo: POUPANCA };
     if (!(fn in mapa)) return r.fulfill({ status: 404, body: '{"message":"fn desconhecida: ' + fn + '"}' });
@@ -149,7 +172,11 @@ const POUPANCA = {
   ok('aviso "sem leitura"', (await page.locator('#rs-aviso').innerText()).includes('leitura de saldo'));
   ok('medido a "—" sem calibração', (await page.locator('#rs-topo .tbox .tv').first().innerText()).trim() === '—');
   ok('estimativa visível', (await page.locator('#rs-topo .tbox.alt .tv').innerText()).includes('0,04'));
-  ok('tabela por app com 2 linhas', await page.locator('#rs-apps tbody tr').count() === 2);
+  ok('custo por app: 2 apps com uso', await page.locator('#rs-apps .ap').count() === 2);
+  ok('app sem uso dita como calada', (await page.locator('#rs-apps .ap-cal').last().innerText()).includes('splitwisely'));
+  ok('função que nunca registou à vista', (await page.locator('#rs-apps .aviso').innerText()).includes('fatura-ocr'));
+  ok('um cartão de funcionalidades por app com uso', await page.locator('#rs-funcs .card').count() === 2);
+  ok('sem calibração, o euro da app vem a cinzento', await page.locator('#rs-apps .ap-e.eur-est').count() === 2);
   ok('marca "vazio" no modelo sem saída', await page.locator('#rs-modelos .tag.wn').count() >= 1);
   ok('catálogo: 3 ações, cada uma na sua unidade', await page.locator('#rs-catalogo tbody tr').count() === 3
      && (await page.locator('#rs-catalogo tbody').innerText()).includes('notas'));
@@ -163,6 +190,16 @@ const POUPANCA = {
   ok('medido aparece com calibração', (await page.locator('#rs-topo .tbox .tv').first().innerText()).includes('0,19'));
   ok('aviso desaparece', !(await page.locator('#rs-aviso').innerText()).includes('leitura de saldo'));
   ok('desvio dito', (await page.locator('#rs-topo .tbox.alt .ts').innerText()).toLowerCase().includes('curta'));
+  ok('app mais cara primeiro', (await page.locator('#rs-apps .ap-t >> nth=0').innerText()).includes('garrafeira'));
+  ok('euro medido da app a tinta', await page.locator('#rs-apps .ap-e.eur-med').count() === 2);
+  // A mais cara POR USO primeiro (sites, 0,0637), e a entrada sempre no fim.
+  const fns = await page.locator('#rs-funcs .card >> nth=0').locator('.fn-t').allInnerTexts();
+  ok('funcionalidades pelo custo médio, a mais cara primeiro', fns[0].includes('sites concretos'));
+  ok('"Recusado à entrada" vai para o fim', fns[fns.length-1].includes('Recusado'));
+  ok('médio por uso a 4 casas', (await page.locator('#rs-funcs .fn-e >> nth=0').innerText()).includes('0,0637'));
+  ok('Serper contado (sem euro)', (await page.locator('#rs-apps').innerText()).includes('3 consultas ao Serper')
+     && (await page.locator('#rs-funcs').innerText()).includes('3 consultas Serper'));
+  ok('vazios ditos na funcionalidade', (await page.locator('#rs-funcs').innerText()).includes('2 vazios'));
   await page.screenshot({ path: '/tmp/aic-2-resumo.png', fullPage: true });
 
   // Registos

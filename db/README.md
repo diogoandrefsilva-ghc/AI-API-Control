@@ -18,9 +18,10 @@ quem herdasse essa app o poder sobre a tabela que mede as outras.
 | 1 | `ia_uso.sql` | o registo: `config`, `registos`, `sou_admin()`, `listar()`, `resumo()` |
 | 2 | `calibracao.sql` | o euro medido: `leituras`, `precos`, `fatores()`, `calc()`, `janelas()`, `custos()`, `resumo_medido()` |
 | 3 | `poupanca.sql` | o que o catálogo de vinhos poupou: `poupanca_catalogo()` |
+| 4 | `funcionalidades.sql` | o custo por app e por funcionalidade: a coluna `registos.funcionalidade`, `funcionalidades` (os nomes), `funcionalidade()`, `resumo_apps()` |
 
-Os três são **idempotentes** — correm as vezes que forem precisas. O 2
-depende do 1 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
+Os quatro são **idempotentes** — correm as vezes que forem precisas. O 2
+depende do 1, o 4 do 1 e do 2 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
 do 1 e da vista `winecatalog.consumo`, que é da WineCatalog
 (`WineCatalog/db/catalogo.sql`) — é a única coisa deste painel que não sai
 da `registos`, porque um pedido servido pelo catálogo não chamou o Gemini e
@@ -30,7 +31,7 @@ por isso não deixou linha aqui.
 
 1. **Project Settings → API → Data API → Exposed schemas** tem de incluir
    `ia_uso`. Sem isso o PostgREST responde `PGRST106` e — pior — os
-   INSERTs das nove Edge Functions são engolidos pelo `try/catch` delas: a
+   INSERTs das Edge Functions são engolidos pelo `try/catch` delas: a
    tabela fica a zero **sem um único erro à vista**. Já aconteceu.
 2. **Authentication → URL Configuration → Redirect URLs**: juntar o URL
    desta app (`https://diogoandrefsilva-ghc.github.io/AI-API-Control/`).
@@ -53,9 +54,9 @@ select count(*) from pg_policies where schemaname = 'ia_uso';  -- 4
 
 ## Quem escreve aqui
 
-Nove Edge Functions, em seis repos. Nenhuma delas vive neste — a
+Catorze Edge Functions, em oito repos. Nenhuma delas vive neste — a
 `registarIaUso()` de cada uma é duplicada de propósito (cada Edge Function
-deste projeto é auto-contida). **Mexer no que se grava é mexer nas nove.**
+deste projeto é auto-contida). **Mexer no que se grava é mexer em todas.**
 
 | app | functions | repo |
 |---|---|---|
@@ -65,9 +66,39 @@ deste projeto é auto-contida). **Mexer no que se grava é mexer nas nove.**
 | `splitbill` | `fatura-restaurante` | SplitBill |
 | `festasbv` | `fatura-ocr` | FestasBV |
 | `goals` **ou** `splitbill` | `calendario-sporting` | Goals |
+| `garrafeira` | `garrafeira-carta`, `garrafeira-produtores`, `garrafeira-colheitas` | Garrafeira |
+| `splitwisely` | `despesa-ia` | SplitWisely |
+| `anniversarygifts` | `prendas-vinho` | AnniversaryGifts |
 
 A última é a única que serve duas apps — o SplitBill lê o mesmo calendário
 — e por isso grava a app de **quem chamou**, não um `goals` fixo.
+
+## O contrato do registo (11/10/2026)
+
+Todas as Edge Functions escrevem a `ia_uso.registos` **da mesma maneira** —
+é o que deixa o painel somar e comparar apps sem pontas soltas:
+
+- **uma linha por uso** que chegou ao fim (bem ou mal). Nada de `pedido`
+  ("vai começar") aqui: isso é do `sync_log` de cada app. A `importar-vinhos`
+  gravava-os e contava cada importação duas vezes;
+- **`funcionalidade`** sempre que se sabe: a chave curta da coisa que a pessoa
+  fez (`sites`, `lote`, `lista`, `grupo`…), com o nome legível na
+  `ia_uso.funcionalidades`. Um pedido recusado antes de se saber o que era
+  grava `entrada`. Sem coluna (o histórico), a `ia_uso.funcionalidade()`
+  deduz do `detalhe`;
+- `app`, `funcao`, `estado` (`ok`/`erro`), `modelo`, os quatro tokens do
+  `usageMetadata`, `duracao_ms`, `quem`, `erro` e o `detalhe` inteiro;
+- **`pesquisa_web`** só quando a chamada sabe se pesquisou; senão vale a
+  regra da `ia_uso.funcoes` — e só para chamadas que chegaram ao Gemini;
+- **uma função nova** entra na `ia_uso.funcoes` (com a `app`) e as suas
+  funcionalidades na `ia_uso.funcionalidades`. Sem isso aparece no painel em
+  "Funções sem regra" — e uma função listada que nunca escreveu aparece em
+  "Nunca registaram".
+
+**A ORDEM do deploy importa**: o `funcionalidades.sql` corre ANTES de se
+fazer deploy de uma function que grave a coluna. Ao contrário, o PostgREST
+recusa a coluna que não conhece, o `try/catch` engole o erro e as linhas
+**perdem-se em silêncio** — a avaria de 20/09/2026 outra vez.
 
 ## Uma função nova nasce ABERTA
 

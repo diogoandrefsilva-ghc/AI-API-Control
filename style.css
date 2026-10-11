@@ -210,6 +210,30 @@ tr:last-child td{border-bottom:none}
 .t-app{font-weight:600;white-space:nowrap}
 .t-sub{display:block;color:var(--mu);font-size:11.5px;font-family:inherit}
 
+/* ── Por app e por funcionalidade ──
+   LISTAS e não tabelas, pela razão das janelas do saldo: os nomes das
+   funcionalidades são compridos e numa tabela empurravam o euro para trás
+   do scroll lateral. Aqui o euro fica sempre à direita, à vista.
+   A barra é GRAFITE: é a mesma afirmação do euro medido (quanto pesa), não
+   uma cor nova. Não lhe dês outra. */
+.ap,.fn{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--ln)}
+.card h2+.nota+.ap,.card h2+.fn{border-top:none}
+.ap-l,.fn-l{flex:1 1 auto;min-width:0}
+.ap-t{font-weight:600;font-size:14px}
+.fn-t{font-weight:600;font-size:13.5px;line-height:1.35}
+.ap-s,.fn-s{color:var(--mu);font-size:11.5px;margin-top:1px;font-variant-numeric:tabular-nums}
+.ap-v,.fn-v{flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums}
+.ap-e{font-size:15px}
+.fn-e{font-size:14.5px}
+.ap-p,.fn-d{font-size:11px;color:var(--mu);white-space:nowrap}
+.bar{height:4px;background:#eef0f3;border-radius:999px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:999px;min-width:2px}
+.fn-ent .fn-t{font-weight:500;color:var(--mu)}
+.ap-cal{margin:10px 0 0}
+.h2-s{font-weight:400;color:var(--mu);font-size:13px}
+.t-er{color:var(--er)}
+.t-wn{color:var(--wn)}
+
 /* ── Lista de registos ──
    Cada linha é um BOTÃO, e um botão herda o alinhamento e o peso do que
    estiver definido para botões. Aqui não há regra global, mas repõe-se à

@@ -58,6 +58,9 @@ milésimos de euro, e arredondá-la punha metade a zero.
   certo; a chamada individual está tão certa quanto a `precos` estiver.
   Mais leituras não melhoram isso — o que melhora é mexer nos rácios e ver
   o `desvio` das janelas descer;
+- uma chamada que **não chegou ao Gemini** (recusada à entrada, cache,
+  catálogo — sem um token) nunca leva a pesquisa da regra da função. Até
+  11/10/2026 levava: 40 linhas assim tinham ~0,45 € do euro medido;
 - as chamadas fora de qualquer janela levam o fator mais próximo e vêm
   `provisorio`. Nunca se calam nem se inventam;
 - o `tokens_pensamento` esteve a NULL até 20/09/2026, por isso no
@@ -112,6 +115,33 @@ em vez de pedir a cada escritor que se auto-declare. E arruma o
 escreveu e não está no mapa. Sem isso, uma função nova que pesquise sempre
 ficava com a pesquisa por contar e **a conta descia sozinha**, que é a pior
 maneira de uma conta estar errada.
+
+## Custo por app e por FUNCIONALIDADE (11/10/2026)
+O dono: "dentro de cada app, quais são as features mais caras, para
+identificar que feature devo tornar premium". O Resumo abre com o **custo
+por app** (barra = a parte de cada uma no total) e, a seguir, **um cartão
+por app com as funcionalidades pelo custo médio por uso** (`resumo_apps()`,
+`db/funcionalidades.sql`).
+- **A funcionalidade não é a Edge Function.** A `vinho-info` faz seis
+  coisas (perguntar à IA, sites concretos, documento, sugerir links, lote,
+  vinho da carta) e a média delas não diz nada de nenhuma. Cada function
+  grava `registos.funcionalidade`; o histórico deduz-se do `detalhe` pela
+  `ia_uso.funcionalidade()` — a MESMA regra que a `funcionalidadeDe()` da
+  `vinho-info`. Mexer numa é mexer na outra.
+- **O médio é por uso CONSEGUIDO**: o total (erros pagos incluídos, o 200
+  vazio paga-se) a dividir pelos que correram bem. Uma média só dos bons
+  escondia as avarias que mais custam.
+- **Tudo é da JANELA** (7/30/90). O "Por app" antigo somava desde sempre ao
+  lado de um seletor que não lhe mexia. As apps sem uso na janela ficam
+  numa linha ("sem uso nestes N dias"), com o sinal de vida.
+- **"Recusado à entrada"** (`entrada`) vai sempre para o fim: é o pedido
+  que nem chegou a ser uma funcionalidade.
+- **"Nunca registaram"**: as funções da `ia_uso.funcoes` sem uma única
+  linha. Pode ser falta de uso ou o deploy sem a `registarIaUso()` — sem a
+  lista eram o mesmo silêncio.
+- O contrato de como todas escrevem está no `db/README.md` ("O contrato do
+  registo"). **SQL primeiro, deploy depois**: uma function que grave a
+  coluna antes de ela existir perde as linhas em silêncio.
 
 ## O 200 vazio é o que este painel existe para mostrar
 HTTP 200, `candidatesTokenCount: 0` — o modelo gastou o orçamento a PENSAR

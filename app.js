@@ -95,7 +95,7 @@ async function iaRpc(fn,args){
     /* A migração por correr é o erro mais provável no primeiro dia, e o
        "404 schema cache" não o diz a ninguém. */
     if(/does not exist|schema cache|PGRST202|PGRST106/i.test(m))
-      m='Falta correr db/ia_uso.sql, db/calibracao.sql e db/poupanca.sql no Supabase, ou expor o schema ia_uso na API (ver db/README.md).';
+      m='Falta correr db/ia_uso.sql, db/calibracao.sql, db/poupanca.sql e db/funcionalidades.sql no Supabase, ou expor o schema ia_uso na API (ver db/README.md).';
     throw new Error(m);
   }
   return tx?JSON.parse(tx):null;
@@ -283,10 +283,12 @@ async function rsCarregar(){
       '<div class="aviso erro">'+esc(e.message)+'</div>';
     topo.innerHTML='';
     document.getElementById('rs-apps').innerHTML='';
+    document.getElementById('rs-funcs').innerHTML='';
     document.getElementById('rs-modelos').innerHTML='';
     return;
   }
   rsDesenhar();
+  rsCarregarApps();
   rsCarregarCatalogo();
 }
 
@@ -365,52 +367,20 @@ function rsDesenhar(){
      O MEDIDO à esquerda, em tinta firme; o ESTIMADO à direita, em
      cinzento e mais pequeno. Não é hierarquia por gosto: é a diferença
      entre um número que se pode defender e um palpite, e este painel
-     existe para não os confundir. */
-  const medido=cal?eurFmt(tot.custoEur,2):null;
+     existe para não os confundir.
+     São da JANELA escolhida — o seletor por cima deles tem de lhes mexer.
+     O "desde sempre" fica por baixo, em letra pequena. */
+  const medido=cal?eurFmt(jan.custoEur,2):null;
   document.getElementById('rs-topo').innerHTML=
     '<div class="topo">'
-    + '<div class="tbox"><div class="tl">Gasto medido · desde sempre</div>'
+    + '<div class="tbox"><div class="tl">Gasto medido · '+RS_DIAS+' dias</div>'
     +   '<div class="tv">'+(medido!=null?esc(medido):'<span class="eur-nd">—</span>')+'</div>'
-    +   '<div class="ts">'+nFmt(tot.pedidos)+' chamadas'
-    +     (cal?'':' · por calibrar')+'</div></div>'
+    +   '<div class="ts">'+nFmt(jan.pedidos)+' chamadas'
+    +     (cal?' · desde sempre '+esc(eurFmt(tot.custoEur,2)):' · por calibrar')+'</div></div>'
     + '<div class="tbox alt"><div class="tl">Estimativa das functions</div>'
-    +   '<div class="tv">'+esc(eurFmt(tot.estimadoEur,2))+'</div>'
-    +   '<div class="ts">'+rsDesvioTxt(tot)+'</div></div>'
-    + '</div>'
-    + '<div class="card"><div class="tw"><table><thead><tr>'
-    +   '<th>Últimos '+RS_DIAS+' dias</th><th class="n">Chamadas</th>'
-    +   '<th class="n">Medido</th><th class="n">Estimado</th></tr></thead><tbody><tr>'
-    +   '<td class="t-app">Janela</td><td class="n">'+nFmt(jan.pedidos)+'</td>'
-    +   '<td class="n eur-med">'+(cal?esc(eurFmt(jan.custoEur,2)):'—')+'</td>'
-    +   '<td class="n eur-est">'+esc(eurFmt(jan.estimadoEur,2))+'</td>'
-    + '</tr></tbody></table></div></div>';
-
-  /* ── Por app, com o sinal de vida ── */
-  const apps=Array.isArray(d.porApp)?d.porApp:[];
-  let h='<div class="card"><h2>Por app</h2>'
-    + '<p class="nota">A última chamada de cada uma é o <b>sinal de vida</b>. '
-    + 'Um registo limpo numa app que não corre não é saúde, é desuso — foi '
-    + 'assim que duas avarias ficaram semanas por apanhar na WineSelection.</p>'
-    + '<div class="tw"><table><thead><tr><th>App</th>'
-    + '<th class="n">Medido</th><th class="n">Estimado</th><th class="n">Chamadas</th>'
-    + '<th class="n">Pesquisas</th><th class="n">Tokens</th></tr></thead><tbody>';
-  if(!apps.length)h+='<tr><td colspan="6" class="t-sub">Ainda não há uma única chamada registada.</td></tr>';
-  for(let i=0;i<apps.length;i++){
-    const a=apps[i];
-    const mortas=diasDesde(a.ultimaChamada)>30;
-    h+='<tr><td class="t-app">'+esc(a.app)
-      + (mortas?'<span class="tag wn">calada</span>':'')
-      + '<span class="t-sub">'+esc(desdeFmt(a.ultimaChamada))+'</span></td>'
-      + '<td class="n eur-med">'+(a.custoEur==null?'—':esc(eurFmt(a.custoEur,2)))
-      +   (a.provisorio&&a.custoEur!=null?'<span class="tag wn">prov.</span>':'')+'</td>'
-      + '<td class="n eur-est">'+esc(eurFmt(a.estimadoEur,2))+'</td>'
-      + '<td class="n">'+nFmt(a.pedidos)
-      +   (Number(a.erro)>0?'<span class="tag er">'+nFmt(a.erro)+' erro</span>':'')+'</td>'
-      + '<td class="n">'+nFmt(a.pesquisas)+'</td>'
-      + '<td class="n">'+nFmt(Number(a.tokensEntrada||0)+Number(a.tokensSaida||0)+Number(a.tokensPensamento||0))+'</td></tr>';
-  }
-  h+='</tbody></table></div></div>';
-  document.getElementById('rs-apps').innerHTML=h;
+    +   '<div class="tv">'+esc(eurFmt(jan.estimadoEur,2))+'</div>'
+    +   '<div class="ts">'+rsDesvioTxt(jan)+'</div></div>'
+    + '</div>';
 
   /* ── Por modelo ── */
   const ms=Array.isArray(d.porModelo)?d.porModelo:[];
@@ -448,6 +418,174 @@ function rsDesvioTxt(tot){
   const dv=(m-e)/e;
   if(Math.abs(dv)<0.05)return 'a estimativa estava certa';
   return 'a estimativa estava '+(dv>0?'CURTA':'LONGA')+' '+pctFmt(Math.abs(dv));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   POR APP E POR FUNCIONALIDADE
+   ══════════════════════════════════════════════════════════════════
+   As duas perguntas que este ecrã existe para responder (11/10/2026, o
+   dono): quanto custa cada APP, e dentro de cada uma quais são as
+   FUNCIONALIDADES mais caras — é aí que se decide o que fica premium.
+
+   A funcionalidade não é a Edge Function: a `vinho-info` faz seis coisas
+   diferentes e a média delas não diz nada de nenhuma. Quem decide qual é
+   cada chamada é a BD (`ia_uso.funcionalidade()`, `db/funcionalidades.sql`)
+   — o que a chamada gravou, ou a regra do histórico.
+
+   O custo MÉDIO é por uso CONSEGUIDO: o total (os erros que se pagaram
+   incluídos) a dividir pelos que correram bem. É o custo real de conseguir
+   uma resposta, e uma média que ignorasse os erros escondia precisamente
+   as avarias que mais custam. */
+let RS_APPS=null;
+
+async function rsCarregarApps(){
+  const a=document.getElementById('rs-apps'),f=document.getElementById('rs-funcs');
+  a.innerHTML='<div class="vazio-msg">a carregar…</div>';f.innerHTML='';
+  try{
+    RS_APPS=await iaRpc('resumo_apps',{p_dias:RS_DIAS});
+  }catch(e){
+    a.innerHTML='<div class="card"><h2>Por app</h2><div class="aviso erro">'+esc(e.message)+'</div></div>';
+    return;
+  }
+  rsDesenharApps();
+}
+
+/* O euro de uma linha: o MEDIDO quando há calibração, a ESTIMATIVA quando
+   não há — e diz-se qual é pela cor, nunca às escondidas. */
+function rsEur(x,campoMed,campoEst){
+  const cal=!!(RS_APPS&&RS_APPS.calibrado);
+  const v=cal?x[campoMed]:x[campoEst];
+  return {v:v==null?null:Number(v),cls:cal?'eur-med':'eur-est'};
+}
+
+/* As recusas à entrada vêm uma por Edge Function (a Garrafeira tem três):
+   juntam-se numa linha só por app — são todas a mesma coisa, o pedido que
+   nem chegou a ser uma funcionalidade. */
+function rsJuntarEntradas(fs){
+  const out=[],fn=[];let e=null;
+  for(let i=0;i<fs.length;i++){
+    const f=fs[i];
+    if(f.chave!=='entrada'){out.push(f);continue;}
+    fn.push(f.funcao);
+    if(!e){e=Object.assign({},f);continue;}
+    ['usos','ok','erro','vazios','pesquisas'].forEach(function(k){e[k]=Number(e[k]||0)+Number(f[k]||0);});
+    ['custoEur','estimadoEur'].forEach(function(k){
+      e[k]=e[k]==null&&f[k]==null?null:Number(e[k]||0)+Number(f[k]||0);});
+    e.provisorio=!!(e.provisorio||f.provisorio);
+  }
+  if(e){e.funcao=fn.join(', ');out.push(e);}
+  return out;
+}
+
+function rsDesenharApps(){
+  const d=RS_APPS||{};
+  const cal=!!d.calibrado;
+  const apps=Array.isArray(d.apps)?d.apps:[];
+  const ativas=apps.filter(function(x){return Number(x.usos)>0;});
+  const caladas=apps.filter(function(x){return !(Number(x.usos)>0);});
+  let total=0;
+  for(let i=0;i<ativas.length;i++){const e=rsEur(ativas[i],'custoEur','estimadoEur');total+=e.v||0;}
+
+  /* ── Custo por app ── */
+  let h='<div class="card"><h2>Custo por app</h2>'
+    + '<p class="nota">Nos últimos '+RS_DIAS+' dias'+(cal?'':', <b>pela estimativa</b> (ainda sem saldo lido)')
+    + '. A barra é a parte de cada app no total; a última chamada é o <b>sinal de vida</b>.</p>';
+  if(!ativas.length)h+='<div class="vazio-msg">Nenhuma chamada nesta janela.</div>';
+  for(let i=0;i<ativas.length;i++){
+    const x=ativas[i],e=rsEur(x,'custoEur','estimadoEur');
+    const quota=total>0&&e.v!=null?e.v/total:0;
+    const medio=Number(x.ok)>0&&e.v!=null?e.v/Number(x.ok):null;
+    h+='<div class="ap">'
+      + '<div class="ap-l"><div class="ap-t">'+esc(x.app)
+      +   (x.provisorio&&cal?'<span class="tag wn">prov.</span>':'')+'</div>'
+      +   '<div class="ap-s">'+nFmt(x.usos)+' usos'
+      +     (Number(x.erro)>0?' · <span class="t-er">'+nFmt(x.erro)+' erro'+(Number(x.erro)===1?'':'s')+'</span>':'')
+      +     (medio!=null?' · '+esc(eurFmt(medio,4))+' por uso':'')
+      +     (Number(x.serper)>0?' · '+nFmt(x.serper)+' Serper':'')
+      +     ' · '+esc(desdeFmt(x.ultimaChamada))+'</div>'
+      +   '<div class="bar"><i style="width:'+(quota*100).toFixed(1)+'%"></i></div></div>'
+      + '<div class="ap-v"><div class="ap-e '+e.cls+'">'+esc(eurFmt(e.v,2))+'</div>'
+      +   '<div class="ap-p">'+(total>0?Math.round(quota*100)+'%':'')+'</div></div>'
+      + '</div>';
+  }
+  /* O Serper paga-se a outro fornecedor e não está no saldo Google que se
+     mede aqui: não há euro honesto para lhe dar. O que há é a CONTAGEM —
+     cada consulta é uma linha na fatura de lá. */
+  let serper=0;
+  for(let i=0;i<ativas.length;i++)serper+=Number(ativas[i].serper||0);
+  if(serper>0){
+    h+='<p class="nota ap-cal"><b>'+nFmt(serper)+'</b> consulta'+(serper===1?'':'s')
+      + ' ao <b>Serper</b> nestes '+RS_DIAS+' dias — pagas à parte, fora do saldo Google '
+      + '(por isso sem euro aqui).</p>';
+  }
+  if(caladas.length){
+    h+='<p class="nota ap-cal">Sem uso nestes '+RS_DIAS+' dias: '
+      + caladas.map(function(x){return '<b>'+esc(x.app)+'</b> ('+esc(desdeFmt(x.ultimaChamada))+')';}).join(', ')
+      + '.</p>';
+  }
+  const sr=Array.isArray(d.semRegisto)?d.semRegisto:[];
+  if(sr.length){
+    h+='<div class="aviso"><b>Nunca registaram uma chamada:</b> '
+      + sr.map(function(x){return esc(x.funcao)+(x.app?' <span class="t-mu">('+esc(x.app)+')</span>':'');}).join(', ')
+      + '. Pode ser só falta de uso — ou o deploy dessa Edge Function ainda sem a '
+      + '<code>registarIaUso()</code>. Sem esta lista, as duas coisas eram o mesmo silêncio.</div>';
+  }
+  h+='</div>';
+  document.getElementById('rs-apps').innerHTML=h;
+
+  /* ── Por funcionalidade, um cartão por app ──
+     Ordenadas pelo custo MÉDIO por uso — é a pergunta "isto devia ser
+     premium?". O total e o peso na app vêm logo a seguir, porque uma
+     funcionalidade cara que ninguém usa pesa menos do que uma barata que
+     corre cem vezes por dia. O "Recusado à entrada" vai sempre para o fim:
+     não é uma funcionalidade, é o pedido que nem chegou a ser uma. */
+  let hf='';
+  for(let i=0;i<ativas.length;i++){
+    const x=ativas[i],fs=rsJuntarEntradas(Array.isArray(x.funcionalidades)?x.funcionalidades:[]);
+    const tApp=rsEur(x,'custoEur','estimadoEur').v||0;
+    fs.sort(function(a,b){
+      const ea=a.chave==='entrada',eb=b.chave==='entrada';
+      if(ea!==eb)return ea?1:-1;
+      const ma=rsEur(a,'medioEur','medioEstEur').v,mb=rsEur(b,'medioEur','medioEstEur').v;
+      if((mb||0)!==(ma||0))return (mb||0)-(ma||0);
+      return Number(b.usos)-Number(a.usos);
+    });
+    let maxM=0;
+    for(let k=0;k<fs.length;k++){const m=rsEur(fs[k],'medioEur','medioEstEur').v;if(m>maxM)maxM=m;}
+    hf+='<div class="card"><h2>'+esc(x.app)+' <span class="h2-s">· por funcionalidade</span></h2>';
+    for(let k=0;k<fs.length;k++){
+      const f=fs[k],m=rsEur(f,'medioEur','medioEstEur'),t=rsEur(f,'custoEur','estimadoEur');
+      const entrada=f.chave==='entrada';
+      const peso=tApp>0&&t.v!=null?t.v/tApp:null;
+      hf+='<div class="fn'+(entrada?' fn-ent':'')+'">'
+        + '<div class="fn-l"><div class="fn-t">'+esc(f.nome)+'</div>'
+        +   '<div class="fn-s">'+esc(f.funcao)+' · '+nFmt(f.usos)+' uso'+(Number(f.usos)===1?'':'s')
+        +     (Number(f.erro)>0?' · <span class="t-er">'+nFmt(f.erro)+' erro'+(Number(f.erro)===1?'':'s')+'</span>':'')
+        +     (Number(f.vazios)>0?' · <span class="t-wn">'+nFmt(f.vazios)+' vazio'+(Number(f.vazios)===1?'':'s')+'</span>':'')
+        +     (Number(f.pesquisas)>0?' · '+nFmt(f.pesquisas)+' c/ pesquisa':'')
+        +     (Number(f.serper)>0?' · '+nFmt(f.serper)+' consulta'+(Number(f.serper)===1?'':'s')+' Serper':'')
+        +     (f.tokensMedios!=null?' · ~'+nFmt(f.tokensMedios)+' tokens':'')
+        +   '</div>'
+        +   (entrada?'':'<div class="bar"><i style="width:'+(maxM>0&&m.v!=null?(m.v/maxM*100).toFixed(1):0)+'%"></i></div>')
+        + '</div>'
+        + '<div class="fn-v">'
+        +   (entrada||m.v==null
+              ?'<div class="fn-e eur-nd">—</div><div class="fn-d">sem usos conseguidos</div>'
+              :'<div class="fn-e '+m.cls+'">'+esc(eurFmt(m.v,4))+'</div><div class="fn-d">por uso</div>')
+        +   '<div class="fn-d">total '+esc(eurFmt(t.v,2))+(peso!=null&&!entrada?' · '+Math.round(peso*100)+'%':'')
+        +     (f.provisorio&&cal?' <span class="tag wn">prov.</span>':'')+'</div>'
+        + '</div></div>';
+    }
+    hf+='</div>';
+  }
+  if(ativas.length){
+    hf+='<p class="nota" style="padding:0 4px">O <b>custo médio</b> é por uso '
+      + '<b>conseguido</b>: o total da funcionalidade — os erros que se pagaram incluídos, '
+      + 'como o 200 vazio — a dividir pelas chamadas que correram bem. É o que custa, '
+      + 'de facto, conseguir uma resposta. A barra compara-a com a mais cara da mesma app. '
+      + 'Com poucos usos, a média é só um indício: conta os usos antes de decidir.</p>';
+  }
+  document.getElementById('rs-funcs').innerHTML=hf;
 }
 
 /* ══════════════════════════════════════════════════════════════════

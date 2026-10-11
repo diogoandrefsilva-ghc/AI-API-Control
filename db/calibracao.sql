@@ -147,7 +147,15 @@ INSERT INTO ia_uso.funcoes (funcao, grounding, nota) VALUES
   ('catalogo-foto',       false, 'visão sobre uma fotografia — nunca pesquisa'),
   ('importar-vinhos',     false, 'lê fotos de rótulos — nunca pesquisa'),
   ('fatura-restaurante',  false, 'OCR de um talão'),
-  ('fatura-ocr',          false, 'OCR de um talão')
+  ('fatura-ocr',          false, 'OCR de um talão'),
+  -- As cinco que chegaram depois. As duas de fora (AnniversaryGifts,
+  -- SplitWisely) foram metidas à mão no SQL Editor e as três da Garrafeira
+  -- nem isso — apareciam no `semRegra`. Ficam aqui, que é a fonte de verdade.
+  ('garrafeira-carta',      false, 'Sugestões da Garrafeira: lê a carta e ordena — sem pesquisa'),
+  ('garrafeira-produtores', false, 'Backoffice: produtores com IA — sem pesquisa'),
+  ('garrafeira-colheitas',  false, 'Backoffice: colheitas que não batem — sem pesquisa'),
+  ('prendas-vinho',         true,  'pesquisa sempre (AnniversaryGifts); grava a coluna a sério, em booleano'),
+  ('despesa-ia',            false, 'SplitWisely: texto (e foto do talão) → despesa em JSON; nunca pesquisa')
 ON CONFLICT (funcao) DO NOTHING;
 
 -- Do mais específico para o mais geral: o que a própria CHAMADA disser
@@ -168,6 +176,12 @@ AS $$
     WHEN jsonb_typeof(r.detalhe -> 'pesquisa') = 'boolean'
       THEN (r.detalhe -> 'pesquisa')::boolean
     WHEN r.pesquisa_web IS NOT NULL THEN r.pesquisa_web
+    -- A regra da função só vale para uma chamada que CHEGOU ao Gemini. Um
+    -- pedido recusado à entrada (sem sessão, sem plano), servido pela cache
+    -- ou pelo catálogo, não tem um token — e não pagou pesquisa nenhuma.
+    -- Até 11/10/2026 levava os 0,03 da pesquisa na mesma: 40 linhas assim
+    -- tinham ~0,45 € do euro medido que era das chamadas a sério.
+    WHEN COALESCE(r.tokens_total, 0) = 0 AND COALESCE(r.tokens_entrada, 0) = 0 THEN false
     ELSE COALESCE((SELECT f.grounding FROM ia_uso.funcoes f WHERE f.funcao = r.funcao), false)
   END;
 $$;
@@ -442,6 +456,9 @@ BEGIN
     WITH m AS (
       SELECT r.*, c.custo_eur, c.provisorio, ia_uso.grounding(r) AS com_pesquisa
         FROM ia_uso.registos r JOIN ia_uso.calc() c ON c.id = r.id
+       -- `pedido` é o "ia começar" da `importar-vinhos`, não uma chamada:
+       -- contado, metia cada importação a contar duas vezes.
+       WHERE r.estado <> 'pedido'
     )
     SELECT jsonb_build_object(
       'janelaDias', p_dias,
