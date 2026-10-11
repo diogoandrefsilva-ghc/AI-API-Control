@@ -142,6 +142,42 @@ AS $$
   );
 $$;
 
+-- ── O HISTÓRICO fica gravado, não deduzido a cada leitura (11/10/2026) ──
+-- As linhas de antes da coluna recebem a funcionalidade UMA vez. A regra de
+-- cima é certa para quase todas — conferida contra o PEDIDO de cada procura
+-- (`garrafeira.analises.pedido`, que diz se levou documentos, sites, um lote
+-- ou um vinho de carta): 443 de 446 batiam. Falhava num caso só: um
+-- documento enviado sem se pedir a garrafa não deixava `imagem_doc` no
+-- registo e lia-se como "sites concretos". Esses corrigem-se pelo pedido.
+--
+-- A ligação registo ↔ análise é a pessoa e a hora: a análise nasce quando a
+-- procura começa, o registo quando acaba (`criado_em − duracao_ms`, com 5 s
+-- de folga). Só se usa quando há UMA análise nessa janela — com várias (as
+-- procuras da carta lançadas de cinco em cinco) não se escolhe.
+--
+-- Idempotente: só toca no que ainda está a NULL. Sem o schema da Garrafeira
+-- (outra base), salta a correção e fica a regra.
+DO $hist$
+BEGIN
+  IF to_regclass('garrafeira.analises') IS NOT NULL THEN
+    UPDATE ia_uso.registos r SET funcionalidade = 'documento'
+      FROM garrafeira.analises a
+     WHERE r.funcao = 'vinho-info' AND r.funcionalidade IS NULL
+       AND lower(a.quem) = lower(r.quem)
+       AND a.criado_em BETWEEN r.criado_em - make_interval(secs => COALESCE(r.duracao_ms, 0) / 1000.0)
+                               - interval '5 seconds' AND r.criado_em
+       AND jsonb_typeof(a.pedido -> 'documentos') = 'array'
+       AND jsonb_array_length(a.pedido -> 'documentos') > 0
+       AND (SELECT count(*) FROM garrafeira.analises b
+             WHERE lower(b.quem) = lower(r.quem)
+               AND b.criado_em BETWEEN r.criado_em - make_interval(secs => COALESCE(r.duracao_ms, 0) / 1000.0)
+                                       - interval '5 seconds' AND r.criado_em) = 1;
+  END IF;
+  UPDATE ia_uso.registos r SET funcionalidade = ia_uso.funcionalidade(r)
+   WHERE r.funcionalidade IS NULL;
+END
+$hist$;
+
 -- ── O resumo por app e por funcionalidade ─────────────────────────────
 -- O que o ecrã do Resumo pede. Tudo na JANELA escolhida (7/30/90 dias) —
 -- o "Por app" de antes somava desde sempre, ao lado de um seletor de

@@ -128,6 +128,11 @@ por app com as funcionalidades pelo custo médio por uso** (`resumo_apps()`,
   grava `registos.funcionalidade`; o histórico deduz-se do `detalhe` pela
   `ia_uso.funcionalidade()` — a MESMA regra que a `funcionalidadeDe()` da
   `vinho-info`. Mexer numa é mexer na outra.
+- **O histórico está GRAVADO na coluna** (11/10/2026), não deduzido a cada
+  leitura. Foi conferido contra o pedido de cada procura
+  (`garrafeira.analises.pedido`): a regra acertava 443 de 446; os 3 que
+  falhavam (documentos sem a garrafa pedida, lidos como "sites") foram
+  corrigidos pelo pedido. Está no `funcionalidades.sql`, idempotente.
 - **O médio é por uso CONSEGUIDO**: o total (erros pagos incluídos, o 200
   vazio paga-se) a dividir pelos que correram bem. Uma média só dos bons
   escondia as avarias que mais custam.
