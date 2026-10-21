@@ -138,6 +138,8 @@ function itab(tab){
   if(el)el.classList.add('on');
   try{localStorage.setItem('aic_tab',tab);}catch(e){}
   if(tab==='resumo')rsCarregar();
+  if(tab==='pessoas')utCarregar();
+  utRefrescoLigar(tab==='pessoas');
   if(tab==='registos')rgCarregar();
   if(tab==='saldo')ltCarregar();
   if(tab==='defs')prCarregar();
@@ -973,6 +975,301 @@ function rsGrafDesenhar(el,linhas,cal,cheio){
   pl.addEventListener('focusin',function(ev){mostrar(alvo(ev));});
   pl.addEventListener('focusout',defeito);
   defeito();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PESSOAS — utilizador × app × data
+   ══════════════════════════════════════════════════════════════════
+   O dono (21/10/2026): "uma visão de custos por utilizador. Utilizador vs
+   App vs Data, e um filtro que vá ajustando". É uma tabela cruzada: o que
+   vai nas linhas e o que vai nas colunas escolhe-se, a terceira dimensão
+   filtra-se.
+
+   A base devolve o CUBO já somado (`ia_uso.custo_utilizadores`, uma linha
+   por dia × app × utilizador) e o cruzamento faz-se aqui: os filtros
+   redesenham na hora, sem botão e sem voltar à base. Só a janela volta lá
+   — e, com o ecrã aberto, um refresco por minuto, que só redesenha se
+   alguma coisa mudou (redesenhar a tabela punha o scroll lateral no zero).
+
+   O euro é o de todo o painel: o MEDIDO a grafite quando há calibração, a
+   ESTIMATIVA a cinzento quando não há, e o provisório a âmbar. */
+let UT_DIAS=30;
+let UT_DADOS=null;
+let UT_ASSINATURA='';  // a última resposta, para o refresco só redesenhar se mudou
+let UT_TIMER=null;
+let UT_RESTAURADO=false;
+const UT_REFRESCO_MS=60000;
+const UT_SEM='(sem)';  // o `quem` a NULL — nenhum email se escreve assim
+const UT_NOMES={quem:'Utilizador',app:'App',dia:'Data'};
+
+function utJanela(d){
+  UT_DIAS=d;
+  const bs=document.querySelectorAll('#ut-janela .seg');
+  for(let i=0;i<bs.length;i++)bs[i].classList.toggle('on',Number(bs[i].dataset.d)===d);
+  utGuardar();
+  utCarregar();
+}
+
+/* As escolhas ficam no browser, por conveniência: voltar a este ecrã e
+   encontrá-lo como se deixou. Não é estado que tenha de sobreviver. */
+function utGuardar(){
+  const v=function(id){return document.getElementById(id).value;};
+  try{localStorage.setItem('aic_ut',JSON.stringify({dias:UT_DIAS,linhas:v('ut-linhas'),
+    colunas:v('ut-colunas'),app:v('ut-app'),quem:v('ut-quem'),medida:v('ut-medida')}));}catch(e){}
+}
+function utRestaurar(){
+  if(UT_RESTAURADO)return;
+  UT_RESTAURADO=true;
+  let s=null;
+  try{s=JSON.parse(localStorage.getItem('aic_ut')||'null');}catch(e){}
+  if(!s)return;
+  if([7,30,90].indexOf(s.dias)>=0){
+    UT_DIAS=s.dias;
+    const bs=document.querySelectorAll('#ut-janela .seg');
+    for(let i=0;i<bs.length;i++)bs[i].classList.toggle('on',Number(bs[i].dataset.d)===UT_DIAS);
+  }
+  ['linhas','colunas','medida'].forEach(function(k){
+    const el=document.getElementById('ut-'+k);
+    if(s[k]!=null&&el.querySelector('option[value="'+s[k]+'"]'))el.value=s[k];
+  });
+  // App e utilizador só existem depois de chegar os dados: o `utEncher` repõe-nos.
+  document.getElementById('ut-app').dataset.quer=s.app||'';
+  document.getElementById('ut-quem').dataset.quer=s.quem||'';
+}
+
+async function utCarregar(auto){
+  utRestaurar();
+  utColunasSync();
+  const el=document.getElementById('ut-tabela'),tp=document.getElementById('t-pessoas');
+  if(!auto){
+    if(el.innerHTML)tp.classList.add('a-carregar');
+    else el.innerHTML='<div class="vazio-msg">a carregar…</div>';
+  }
+  const dias=UT_DIAS;
+  let d;
+  try{
+    d=await iaRpc('custo_utilizadores',{p_dias:dias});
+  }catch(e){
+    tp.classList.remove('a-carregar');
+    if(auto)return;  // um refresco falhado não apaga o que está à vista
+    document.getElementById('ut-topo').innerHTML='';
+    el.innerHTML='<div class="aviso erro">'+esc(e.message)+'</div>';
+    return;
+  }
+  if(dias!==UT_DIAS)return;  // entretanto mudou a janela: esta resposta já não serve
+  tp.classList.remove('a-carregar');
+  const ass=JSON.stringify(d);
+  if(auto&&ass===UT_ASSINATURA)return;
+  UT_ASSINATURA=ass;
+  UT_DADOS=d||{};
+  utEncher();
+  utDesenhar();
+}
+
+/* O refresco só corre com o ecrã À VISTA: o separador aberto, a app em
+   primeiro plano e nenhuma ficha por cima. */
+function utRefrescoLigar(on){
+  if(UT_TIMER){clearInterval(UT_TIMER);UT_TIMER=null;}
+  if(!on)return;
+  UT_TIMER=setInterval(function(){
+    if(document.visibilityState!=='visible')return;
+    if(document.querySelector('.modal.on'))return;
+    if(document.getElementById('t-pessoas').offsetParent===null)return;  // saiu da sessão
+    utCarregar(true);
+  },UT_REFRESCO_MS);
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&UT_TIMER)utCarregar(true);
+});
+
+function utLinhas(){return Array.isArray((UT_DADOS||{}).linhas)?UT_DADOS.linhas:[];}
+function utQuem(r){return r.quem||UT_SEM;}
+
+/* Os seletores enchem-se do que existe na janela. O que estava escolhido
+   fica, mesmo sem uso nestes dias — tirá-lo calado era mudar o filtro
+   nas costas de quem o pôs. */
+function utEncher(){
+  const ls=utLinhas();
+  const tot={};
+  ['app','quem'].forEach(function(k){tot[k]={};});
+  for(let i=0;i<ls.length;i++){
+    const v=utValor(ls[i]);
+    tot.app[ls[i].app]=(tot.app[ls[i].app]||0)+v;
+    tot.quem[utQuem(ls[i])]=(tot.quem[utQuem(ls[i])]||0)+v;
+  }
+  [['app','todas'],['quem','todos']].forEach(function(p){
+    const sel=document.getElementById('ut-'+p[0]);
+    const atual=sel.dataset.quer!=null&&sel.dataset.quer!==''?sel.dataset.quer:sel.value;
+    delete sel.dataset.quer;
+    const ks=Object.keys(tot[p[0]]).sort(function(a,b){return tot[p[0]][b]-tot[p[0]][a]||a.localeCompare(b);});
+    if(atual&&ks.indexOf(atual)<0)ks.push(atual);
+    let h='<option value="">'+p[1]+'</option>';
+    for(let i=0;i<ks.length;i++){
+      h+='<option value="'+esc(ks[i])+'">'+esc(utRotulo(p[0],ks[i]))
+        + (tot[p[0]][ks[i]]==null?' (sem uso)':'')+'</option>';
+    }
+    sel.innerHTML=h;
+    sel.value=atual||'';
+  });
+}
+
+/* O que se soma: o euro (medido, ou a estimativa sem calibração) ou os usos. */
+function utCal(){return !!(UT_DADOS&&UT_DADOS.calibrado);}
+function utEhEur(){return document.getElementById('ut-medida').value!=='usos';}
+function utValor(r){
+  if(!utEhEur())return Number(r.usos||0);
+  const v=utCal()?r.custoEur:r.estimadoEur;
+  return v==null?0:Number(v);
+}
+
+/* Até 30 dias, um dia por linha; na janela de 90, uma semana (a começar à
+   segunda) — noventa linhas não se leem. */
+function utSemanal(){return UT_DIAS>30;}
+function utChave(r,dim){
+  if(dim==='quem')return utQuem(r);
+  if(dim==='app')return r.app;
+  if(dim==='dia'){
+    if(!utSemanal())return r.dia;
+    const d=new Date(r.dia+'T12:00:00');
+    d.setDate(d.getDate()-(d.getDay()+6)%7);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  return '';
+}
+function utRotulo(dim,k,curto){
+  if(dim==='quem'){
+    if(k===UT_SEM)return 'sem utilizador';
+    // Nas colunas, só a parte antes do @: cinco emails lado a lado não cabem.
+    return curto&&k.indexOf('@')>0?k.slice(0,k.indexOf('@')):k;
+  }
+  if(dim==='dia'){
+    const d=new Date(k+'T12:00:00');
+    if(isNaN(d))return k;
+    const f=function(x){return x.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'});};
+    if(!utSemanal())return f(d)+' '+d.toLocaleDateString('pt-PT',{weekday:'short'}).replace('.','');
+    const fim=new Date(d);fim.setDate(fim.getDate()+6);
+    return f(d)+'–'+f(fim);
+  }
+  return k;
+}
+function utRotuloHtml(dim,k,curto){
+  const t=utRotulo(dim,k,curto);
+  if(dim==='quem'&&k===UT_SEM)return '<span class="t-mu">'+esc(t)+'</span>';
+  return esc(t);
+}
+
+/* Um filtro mexeu. Linhas e colunas não podem ser a mesma dimensão: essa
+   opção fica desligada nas colunas, e se era a escolhida passa à seguinte. */
+function utColunasSync(){
+  const lin=document.getElementById('ut-linhas').value,col=document.getElementById('ut-colunas');
+  for(let i=0;i<col.options.length;i++)col.options[i].disabled=col.options[i].value===lin;
+  if(col.value===lin){
+    for(let i=0;i<col.options.length;i++)if(!col.options[i].disabled){col.value=col.options[i].value;break;}
+  }
+}
+function utFiltro(){
+  utColunasSync();
+  utGuardar();
+  if(UT_DADOS){utEncher();utDesenhar();}
+}
+
+function utDesenhar(){
+  const lin=document.getElementById('ut-linhas').value;
+  let col=document.getElementById('ut-colunas').value;
+  if(col===lin)col='';
+  const fApp=document.getElementById('ut-app').value,fQuem=document.getElementById('ut-quem').value;
+  const eur=utEhEur(),cal=utCal();
+  const cls=eur?(cal?'eur-med':'eur-est'):'';
+  const fmt=function(v){return eur?eurFmt(v,2):nFmt(v);};
+
+  const ls=utLinhas().filter(function(r){
+    return (!fApp||r.app===fApp)&&(!fQuem||utQuem(r)===fQuem);
+  });
+  const L={},C={};let total=0,usos=0,prov=false;
+  const pessoas={},apps={};
+  for(let i=0;i<ls.length;i++){
+    const r=ls[i],v=utValor(r),p=!!(eur&&cal&&r.provisorio);
+    const lk=utChave(r,lin),ck=col?utChave(r,col):'';
+    const l=L[lk]||(L[lk]={k:lk,tot:0,prov:false,c:{}});
+    l.tot+=v;l.prov=l.prov||p;
+    const c=l.c[ck]||(l.c[ck]={v:0,prov:false,n:0});
+    c.v+=v;c.prov=c.prov||p;c.n+=Number(r.usos||0);
+    if(col){const cc=C[ck]||(C[ck]={k:ck,tot:0,prov:false});cc.tot+=v;cc.prov=cc.prov||p;}
+    total+=v;prov=prov||p;usos+=Number(r.usos||0);
+    pessoas[utQuem(r)]=1;apps[r.app]=1;
+  }
+  // A data vai da mais recente para trás: é a que se veio ver, e não pode
+  // ficar atrás do scroll. O resto vai do que mais pesa para o que menos.
+  const ord=function(dim){return function(a,b){
+    if(dim==='dia')return a.k<b.k?1:a.k>b.k?-1:0;
+    return b.tot-a.tot||String(a.k).localeCompare(String(b.k));
+  };};
+  const linhas=Object.keys(L).map(function(k){return L[k];}).sort(ord(lin));
+  const colunas=Object.keys(C).map(function(k){return C[k];}).sort(ord(col));
+
+  /* ── Os números de cima ── */
+  const np=Object.keys(pessoas).filter(function(k){return k!==UT_SEM;}).length;
+  let t='<div class="kpis">'
+    + rsKpi(eur?(cal?'Gasto medido':'Gasto estimado'):'Usos',esc(fmt(total)),cls+(prov?' t-wn':''),
+            UT_DIAS+' dias'+(eur?' · '+nFmt(usos)+' uso'+(usos===1?'':'s'):''))
+    + rsKpi('Utilizadores',nFmt(np),'',
+            nFmt(Object.keys(apps).length)+' app'+(Object.keys(apps).length===1?'':'s')
+            + (pessoas[UT_SEM]?' · e chamadas sem utilizador':''))
+    + '</div>';
+  if(eur&&!cal)t+='<p class="nota sec-n">Ainda sem saldo lido: os euros são a <b>estimativa</b> das functions, a cinzento.</p>';
+  document.getElementById('ut-topo').innerHTML=t;
+
+  const el=document.getElementById('ut-tabela');
+  if(!linhas.length){
+    el.innerHTML='<div class="card"><div class="vazio-msg">Nenhuma chamada '
+      + (fApp||fQuem?'com estes filtros ':'')+'nesta janela.</div></div>';
+    return;
+  }
+
+  /* ── A tabela cruzada ──
+     O TOTAL é a primeira coluna de números (é o que se veio ver); a seguir
+     as colunas da dimensão escolhida. Uma célula vazia é um ponto apagado,
+     não "0,00 €" — isso era dizer que custou zero. */
+  const cel=function(v,p,forte){
+    return '<td class="n'+(forte?' ut-tot':'')+'"><span class="'+cls+(p?' t-wn':'')+'">'+esc(fmt(v))+'</span></td>';
+  };
+  let h='<div class="card"><h2>'+esc(UT_NOMES[lin])+(col?' × '+esc(UT_NOMES[col]):'')+'</h2>'
+    + '<div class="tw"><table class="ut-t"><thead><tr><th>'+esc(UT_NOMES[lin])
+    + (lin==='dia'&&utSemanal()?' (semana)':'')+'</th><th class="n">Total</th>';
+  for(let j=0;j<colunas.length;j++){
+    h+='<th class="n"'+(col==='quem'?' title="'+esc(utRotulo('quem',colunas[j].k))+'"':'')+'>'
+      + utRotuloHtml(col,colunas[j].k,true)+'</th>';
+  }
+  h+='</tr></thead><tbody>';
+  for(let i=0;i<linhas.length;i++){
+    const l=linhas[i];
+    const w=total>0?l.tot/total*100:0;
+    h+='<tr><td class="ut-l">'+utRotuloHtml(lin,l.k,false)
+      + (lin!=='dia'&&eur?'<div class="bar'+(cal?'':' est')+'"><i style="width:'+w.toFixed(1)+'%"></i></div>':'')
+      + '</td>'+cel(l.tot,l.prov,true);
+    for(let j=0;j<colunas.length;j++){
+      const c=l.c[colunas[j].k];
+      h+=c&&c.n>0?cel(c.v,c.prov,false):'<td class="n ut-0">·</td>';
+    }
+    h+='</tr>';
+  }
+  h+='</tbody>';
+  if(linhas.length>1){
+    h+='<tfoot><tr><td>Total</td>'+cel(total,prov,true);
+    for(let j=0;j<colunas.length;j++)h+=cel(colunas[j].tot,colunas[j].prov,true);
+    h+='</tr></tfoot>';
+  }
+  h+='</table></div></div>';
+
+  let n='';
+  if(pessoas[UT_SEM])n+='<b>Sem utilizador</b> são chamadas que não gravaram quem pediu '
+    + '(o histórico mais antigo, ou feitas sem sessão). ';
+  if(prov)n+='A <span class="t-wn">âmbar</span>, valores com chamadas <b>provisórias</b> — ainda sem uma '
+    + 'janela de saldo fechada. ';
+  n+='Os dias são os de Lisboa'+(utSemanal()?', e nos 90 dias contam-se por semana, de segunda a domingo':'')+'. '
+    + 'Os filtros mudam a tabela na hora; com este ecrã aberto, os números atualizam-se sozinhos a cada minuto.';
+  h+='<p class="nota sec-n">'+n+'</p>';
+  el.innerHTML=h;
 }
 
 /* ══════════════════════════════════════════════════════════════════

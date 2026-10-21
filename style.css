@@ -183,7 +183,8 @@ code{font-family:var(--mono);font-size:.92em;background:#f0f2f5;padding:1px 5px;
 /* Ao mudar de janela, o que já lá estava fica a meia tinta até chegar o
    novo — em vez de piscar e saltar de altura. */
 #t-resumo.a-carregar #rs-topo,#t-resumo.a-carregar #rs-apps,#t-resumo.a-carregar #rs-funcs,
-#t-resumo.a-carregar #rs-modelos,#t-resumo.a-carregar #rs-catalogo{opacity:.45;transition:opacity .15s}
+#t-resumo.a-carregar #rs-modelos,#t-pessoas.a-carregar #ut-topo,#t-pessoas.a-carregar #ut-tabela,
+#t-resumo.a-carregar #rs-catalogo{opacity:.45;transition:opacity .15s}
 
 /* ── Avisos ──
    Âmbar é "não sei ainda", vermelho é "está mal". Não os troques: um
@@ -471,3 +472,15 @@ pre.raw{
   .mbox{max-width:none;border-radius:16px 16px 0 0;max-height:92vh;
         padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 }
+
+/* ── Pessoas: a tabela cruzada ──
+   O total de cada linha a cheio; uma célula sem uso é um ponto apagado,
+   nunca "0,00 €". A barra por baixo do nome é a parte da linha no total —
+   grafite, a mesma afirmação do euro medido. */
+#ut-topo .kpi{background:var(--card);border:1px solid var(--ln)}
+.ut-t .ut-l{min-width:120px}
+.ut-t .ut-l .bar{max-width:180px}
+.ut-t td.ut-tot{font-weight:600}
+.ut-t td.ut-0{color:#c3c9d0}
+.ut-t tfoot td{border-top:1px solid var(--ink);border-bottom:none;font-weight:600}
+
