@@ -78,6 +78,7 @@
 
   <nav class="itabs">
     <button class="it on" data-tab="resumo"   onclick="itab('resumo')">Resumo</button>
+    <button class="it"    data-tab="pessoas"  onclick="itab('pessoas')">Pessoas</button>
     <button class="it"    data-tab="registos" onclick="itab('registos')">Registos</button>
     <button class="it"    data-tab="saldo"    onclick="itab('saldo')">Saldo</button>
     <button class="it"    data-tab="defs"     onclick="itab('defs')">Definições</button>
@@ -99,6 +100,57 @@
     <div id="rs-funcs"></div>
     <div id="rs-modelos"></div>
     <div id="rs-catalogo"></div>
+  </div>
+
+  <!-- ── PESSOAS: utilizador × app × data ──
+     Os filtros redesenham na hora, sem botão: os dados vêm já somados
+     (`ia_uso.custo_utilizadores`) e cruzam-se no browser. Só a janela volta
+     à base — e o ecrã refresca-se sozinho enquanto está aberto. -->
+  <div id="t-pessoas" class="tp">
+    <div class="jan">
+      <span class="jan-l">Janela</span>
+      <div class="segs" id="ut-janela">
+        <button class="seg" data-d="7"   onclick="utJanela(7)">7 dias</button>
+        <button class="seg on" data-d="30" onclick="utJanela(30)">30 dias</button>
+        <button class="seg" data-d="90"  onclick="utJanela(90)">90 dias</button>
+      </div>
+    </div>
+    <div class="card filtros">
+      <div class="fl">
+        <label for="ut-linhas">Linhas</label>
+        <select id="ut-linhas" onchange="utFiltro()">
+          <option value="quem">Utilizador</option>
+          <option value="app">App</option>
+          <option value="dia">Data</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label for="ut-colunas">Colunas</label>
+        <select id="ut-colunas" onchange="utFiltro()">
+          <option value="app">App</option>
+          <option value="quem">Utilizador</option>
+          <option value="dia">Data</option>
+          <option value="">só o total</option>
+        </select>
+      </div>
+      <div class="fl">
+        <label for="ut-app">App</label>
+        <select id="ut-app" onchange="utFiltro()"><option value="">todas</option></select>
+      </div>
+      <div class="fl">
+        <label for="ut-quem">Utilizador</label>
+        <select id="ut-quem" onchange="utFiltro()"><option value="">todos</option></select>
+      </div>
+      <div class="fl">
+        <label for="ut-medida">Mostrar</label>
+        <select id="ut-medida" onchange="utFiltro()">
+          <option value="eur">euros</option>
+          <option value="usos">usos</option>
+        </select>
+      </div>
+    </div>
+    <div id="ut-topo"></div>
+    <div id="ut-tabela"></div>
   </div>
 
   <!-- ── REGISTOS ── -->

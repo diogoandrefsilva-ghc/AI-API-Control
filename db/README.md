@@ -19,9 +19,10 @@ quem herdasse essa app o poder sobre a tabela que mede as outras.
 | 2 | `calibracao.sql` | o euro medido: `leituras`, `precos`, `fatores()`, `calc()`, `janelas()`, `custos()`, `resumo_medido()` |
 | 3 | `poupanca.sql` | o que o catálogo de vinhos poupou: `poupanca_catalogo()` |
 | 4 | `funcionalidades.sql` | o custo por app e por funcionalidade: a coluna `registos.funcionalidade`, `funcionalidades` (os nomes), `funcionalidade()`, `resumo_apps()` |
+| 5 | `utilizadores.sql` | o custo por utilizador: `custo_utilizadores()`, o cubo dia × app × utilizador |
 
-Os quatro são **idempotentes** — correm as vezes que forem precisas. O 2
-depende do 1, o 4 do 1 e do 2 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
+Os cinco são **idempotentes** — correm as vezes que forem precisas. O 2
+depende do 1, o 4 e o 5 do 1 e do 2 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
 do 1 e da vista `winecatalog.consumo`, que é da WineCatalog
 (`WineCatalog/db/catalogo.sql`) — é a única coisa deste painel que não sai
 da `registos`, porque um pedido servido pelo catálogo não chamou o Gemini e

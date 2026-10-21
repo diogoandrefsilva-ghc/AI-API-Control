@@ -11,19 +11,19 @@ Garrafeira para a WineCatalog — não é de nenhuma das seis apps que
 escrevem nele. Lá ficou um ponteiro em `db/README.md` e **nenhuma cópia**.
 
 ## Estrutura
-- `index.html` — só markup: os quatro separadores, os três ecrãs de
+- `index.html` — só markup: os cinco separadores, os três ecrãs de
   autenticação, o splash, a ficha de uma app/funcionalidade e a de um
   registo.
 - `app.js` — toda a lógica (~950 linhas). Secções (`grep` pelo título, não
   leias o ficheiro todo): SESSÃO SUPABASE · RPC · ESCAPES · TOAST ·
   MODAIS · TABS · FORMATAÇÃO · **O 200 VAZIO** · **RESUMO** · POR APP E
-  POR FUNCIONALIDADE · A FICHA DE UMA APP OU DE UMA FUNCIONALIDADE · REGISTOS ·
+  POR FUNCIONALIDADE · A FICHA DE UMA APP OU DE UMA FUNCIONALIDADE · **PESSOAS** · REGISTOS ·
   **SALDO** · RÁCIOS · AUTH · INIT.
 - `style.css` — todo o CSS. Ler o cabeçalho antes de lhe mexer: a cor é um
   sistema, não gosto.
 - `sw.js` — service worker.
 - `db/` — **fonte de verdade do schema `ia_uso`**; ver `db/README.md`.
-- `tests/ecras.js` — o teste dos quatro ecrãs; ver `tests/README.md`.
+- `tests/ecras.js` — o teste dos cinco ecrãs; ver `tests/README.md`.
 - Não mexer à mão: `apple-touch-icon.png`, `icon-512.png` (são gerados —
   ver "Ícones").
 
@@ -176,6 +176,27 @@ O dono: "o grafismo que está a faltar, principalmente no primeiro ecrã".
 - **O `flex-grow` das partes de uma coluna vai em percentagem.** Um
   `flex-grow` que some menos de 1 só enche essa fração do espaço, e os
   cêntimos somam sempre menos de 1: as colunas ficavam a boiar.
+
+## Custo por UTILIZADOR — o separador Pessoas (21/10/2026)
+O dono: "uma visão de custos por utilizador. Utilizador vs App vs Data, e um
+filtro que vá ajustando e refresque sozinho".
+- **Tabela cruzada**: escolhe-se o que vai nas LINHAS e nas COLUNAS
+  (utilizador, app, data — nunca a mesma nas duas; a opção fica desligada),
+  e filtra-se por app e por utilizador. Euros ou usos.
+- **A base devolve o cubo já somado** (`ia_uso.custo_utilizadores()`,
+  `db/utilizadores.sql`): uma linha por dia × app × utilizador. O cruzamento
+  faz-se no browser, por isso **os filtros redesenham na hora, sem botão**.
+  Só a janela (7/30/90) volta à base.
+- **Refresca-se sozinho a cada minuto** enquanto o separador está à vista
+  (app em primeiro plano, nenhuma ficha aberta), e **só redesenha se a
+  resposta mudou** — redesenhar punha o scroll lateral da tabela no zero.
+- O `quem` vem em minúsculas da base. A NULL é **"sem utilizador"**, nunca
+  atribuído a ninguém. O dia é o de **Lisboa**; na janela de 90 conta-se por
+  semana (segunda a domingo).
+- O TOTAL é a primeira coluna de números; uma célula sem uso é um **ponto
+  apagado**, nunca `0,00 €`. As cores são as do resto (medido a grafite,
+  estimativa a cinzento, provisório a âmbar).
+- As escolhas ficam no `localStorage` (`aic_ut`) — conveniência, não estado.
 
 ## O 200 vazio é o que este painel existe para mostrar
 HTTP 200, `candidatesTokenCount: 0` — o modelo gastou o orçamento a PENSAR

@@ -89,6 +89,15 @@ function resumoApps(calibrado){
        ultimaChamada:'2026-08-01T10:00:00Z',funcionalidades:[]}],
     semRegisto:[{funcao:'fatura-ocr',app:'festasbv'}]};
 }
+// O cubo do custo por utilizador (db/utilizadores.sql): dia × app × quem.
+// As datas são as de hoje e de ontem — o filtro da janela é da base.
+const DIA = (n) => { const d = new Date(Date.now() - n * 86400000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const CUBO = (calibrado) => ({janelaDias:30,calibrado,linhas:[
+  {dia:DIA(0),app:'garrafeira',quem:'a@b.c',usos:3,ok:3,erro:0,custoEur:calibrado?0.30:null,estimadoEur:0.01,provisorio:false},
+  {dia:DIA(0),app:'garrafeira',quem:null,usos:1,ok:1,erro:0,custoEur:calibrado?0.05:null,estimadoEur:0.002,provisorio:false},
+  {dia:DIA(1),app:'garrafeira',quem:'pedro@x.pt',usos:2,ok:1,erro:1,custoEur:calibrado?0.12:null,estimadoEur:0.004,provisorio:true},
+  {dia:DIA(1),app:'winecatalog',quem:'a@b.c',usos:4,ok:4,erro:0,custoEur:calibrado?0.20:null,estimadoEur:0.04,provisorio:false}]});
 const JANELAS = [
   // A Google atrasou-se: a janela das chamadas deu 0,00 € e a seguinte
   // apareceu com o euro e sem chamadas — o `fatores()` juntou-as.
@@ -146,7 +155,7 @@ const POUPANCA = {
     const fn = r.request().url().split('/rpc/')[1].split('?')[0];
     const args = JSON.parse(r.request().postData() || '{}');
     const custos = REGISTOS.filter(x => !args.p_app || x.app === args.p_app);
-    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos,
+    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos, custo_utilizadores: CUBO(CALIBRADO),
                    janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS,
                    poupanca_catalogo: POUPANCA };
     if (!(fn in mapa)) return r.fulfill({ status: 404, body: '{"message":"fn desconhecida: ' + fn + '"}' });
@@ -262,6 +271,40 @@ const POUPANCA = {
      && await page.locator('#modal-rs').isVisible());
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
+
+  // Pessoas: utilizador × app × data, e os filtros a mexer na hora.
+  await page.click('.it[data-tab="pessoas"]');
+  await page.waitForTimeout(400);
+  const utLin = () => page.locator('#ut-tabela tbody tr');
+  ok('pessoas: uma linha por utilizador', await utLin().count() === 3);
+  ok('pessoas: o que mais gasta primeiro', (await utLin().nth(0).locator('td').nth(0).innerText()).includes('a@b.c')
+     && (await utLin().nth(0).locator('td').nth(1).innerText()).includes('0,50'));
+  ok('pessoas: o total é a primeira coluna, e as apps a seguir', (await page.locator('#ut-tabela thead th').allInnerTexts())
+     .map(t => t.toLowerCase()).join('|') === 'utilizador|total|garrafeira|winecatalog');
+  ok('pessoas: o total de tudo em baixo', (await page.locator('#ut-tabela tfoot td').nth(1).innerText()).includes('0,67'));
+  ok('pessoas: sem uso é um ponto, não 0,00 €', await page.locator('#ut-tabela td.ut-0').count() === 2);
+  ok('pessoas: o quem a NULL dito como "sem utilizador"', (await page.locator('#ut-tabela').innerText()).includes('sem utilizador'));
+  ok('pessoas: o provisório a âmbar', await utLin().nth(1).locator('td').nth(1).locator('.t-wn').count() === 1);
+  ok('pessoas: medido a grafite', await page.locator('#ut-tabela td .eur-med').count() > 0);
+  ok('pessoas: as colunas não repetem as linhas', await page.locator('#ut-colunas option[value="quem"]').evaluate(o => o.disabled));
+  await page.screenshot({ path: '/tmp/aic-3b-pessoas.png', fullPage: true });
+  await page.selectOption('#ut-app', 'winecatalog');
+  await page.waitForTimeout(100);
+  ok('pessoas: o filtro da app redesenha na hora', await utLin().count() === 1
+     && (await page.locator('#ut-topo').innerText()).includes('0,20'));
+  await page.selectOption('#ut-app', '');
+  await page.selectOption('#ut-linhas', 'dia');
+  await page.selectOption('#ut-colunas', 'quem');
+  await page.waitForTimeout(100);
+  ok('pessoas: data × utilizador, a mais recente primeiro', await utLin().count() === 2
+     && (await page.locator('#ut-tabela thead th').nth(2).innerText()).toLowerCase() === 'a');
+  await page.selectOption('#ut-medida', 'usos');
+  await page.waitForTimeout(100);
+  ok('pessoas: em usos', (await page.locator('#ut-tabela tfoot td').nth(1).innerText()).trim() === '10');
+  await page.screenshot({ path: '/tmp/aic-3c-pessoas-dias.png', fullPage: true });
+  await page.selectOption('#ut-medida', 'eur');
+  await page.selectOption('#ut-linhas', 'quem');
+  await page.selectOption('#ut-colunas', 'app');
 
   // Registos
   await page.click('.it[data-tab="registos"]');
