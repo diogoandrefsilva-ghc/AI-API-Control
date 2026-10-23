@@ -19,38 +19,55 @@ const REGISTOS = [
    modelo:'gemini-flash-lite-latest',pesquisa_web:true,tokens_entrada:993,tokens_saida:485,
    tokens_pensamento:null,custo_estimado_eur:0.001,duracao_ms:8210,quem:'a@b.c',erro:null,
    detalhe:{modo:'barato',pesquisa:'grounding:google_search',campos:5},
-   peso:0.030321,fator:1.0502,custo_eur:0.031843,provisorio:false},
+   conta:'google',peso:0.030321,fator:1.0502,custo_eur:0.031843,provisorio:false},
   {id:6,funcionalidade:'procurar',criado_em:'2026-09-20T14:18:02.069Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
    modelo:'gemini-flash-lite-latest',pesquisa_web:null,tokens_entrada:1137,tokens_saida:505,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:6100,quem:'a@b.c',erro:null,
    detalhe:{campos:1,manual:false,vinho_id:162,propostos:1,fontes:0},
-   peso:0.030316,fator:1.0502,custo_eur:0.031838,provisorio:false},
+   conta:'google',peso:0.030316,fator:1.0502,custo_eur:0.031838,provisorio:false},
   {id:5,funcionalidade:'procurar',criado_em:'2026-09-20T14:05:47.019Z',app:'winecatalog',funcao:'catalogo-info',estado:'ok',
    modelo:'gemini-flash-latest',pesquisa_web:null,tokens_entrada:5989,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:21400,quem:'a@b.c',erro:null,
    detalhe:{passo:'sem_campos',campos:0,modelo:'gemini-flash-latest',finishReason:'MAX_TOKENS',
             usageMetadata:{promptTokenCount:5989,candidatesTokenCount:0,totalTokenCount:10966}},
-   peso:0.031797,fator:1.0502,custo_eur:0.033394,provisorio:false},
+   conta:'google',peso:0.031797,fator:1.0502,custo_eur:0.033394,provisorio:false},
   {id:4,funcionalidade:'procurar',criado_em:'2026-09-20T13:56:07.711Z',app:'winecatalog',funcao:'catalogo-info',estado:'erro',
    modelo:'gemini-flash-latest',pesquisa_web:null,tokens_entrada:3292,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0.01,duracao_ms:18000,quem:'a@b.c',
    erro:'o modelo não devolveu resposta (MAX_TOKENS)',
    detalhe:{passo:'gemini_vazio',finishReason:'MAX_TOKENS'},
-   peso:0.030988,fator:1.0502,custo_eur:0.032544,provisorio:false}
+   conta:'google',peso:0.030988,fator:1.0502,custo_eur:0.032544,provisorio:false}
   ,{id:3,funcionalidade:'sugerir',criado_em:'2026-09-20T13:40:00.000Z',app:'wineselection',funcao:'sugerir-vinho',estado:'erro',
    modelo:'gemini-flash-latest',pesquisa_web:true,tokens_entrada:0,tokens_saida:0,
    tokens_pensamento:null,custo_estimado_eur:0,duracao_ms:2100,quem:'a@b.c',
    erro:'gemini 503 (gemini-flash-latest): The model is overloaded.',
    detalhe:{passo:'gemini',status:503,pesquisa:true},
-   peso:0.030,fator:1.0502,custo_eur:0.03151,provisorio:true}
+   conta:'google',peso:0.030,fator:1.0502,custo_eur:0.03151,provisorio:true}
 ];
 const PRECOS = [
-  {modelo:'*',eur_entrada_1m:0.10,eur_saida_1m:0.40,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'linha de recurso'},
-  {modelo:'gemini-flash-latest',eur_entrada_1m:0.30,eur_saida_1m:2.50,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'o ponteiro do flash'},
-  {modelo:'gemini-flash-lite-latest',eur_entrada_1m:0.10,eur_saida_1m:0.40,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'o ponteiro do lite'}
+  {modelo:'*',conta:'google',eur_entrada_1m:0.10,eur_saida_1m:0.40,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'linha de recurso'},
+  {modelo:'gemini-flash-latest',conta:'google',eur_entrada_1m:0.30,eur_saida_1m:2.50,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'o ponteiro do flash'},
+  {modelo:'gemini-flash-lite-latest',conta:'google',eur_entrada_1m:0.10,eur_saida_1m:0.40,eur_pensamento_1m:null,eur_pesquisa:0.030,nota:'o ponteiro do lite'},
+  {modelo:'claude-*',conta:'anthropic',eur_entrada_1m:2,eur_saida_1m:10,eur_pensamento_1m:null,eur_pesquisa:0.010,nota:'um Claude que ainda não está aqui'},
+  {modelo:'claude-haiku-5-5',conta:'anthropic',eur_entrada_1m:0.10,eur_saida_1m:0.50,eur_pensamento_1m:null,eur_pesquisa:0.010,nota:'tabela da Anthropic em dólares'}
 ];
-function resumo(calibrado){
-  return {janelaDias:30,calibrado,semRegra:[],
+// As duas contas (db/calibracao.sql): o Gemini em euros, o Claude em dólares.
+const CONTAS = [
+  {conta:'google',nome:'Gemini',moeda:'EUR',eur_por_unidade:1,nota:null},
+  {conta:'anthropic',nome:'Claude',moeda:'USD',eur_por_unidade:0.86,nota:null}
+];
+// `claude` diz se a conta da Anthropic tem leituras: com a Google calibrada
+// e a Anthropic não, as chamadas do Claude ficam fora do medido — e dito.
+function resumo(calibrado, claude){
+  const cc = calibrado && claude !== false;
+  return {janelaDias:30,calibrado,semRegra:[],mistas:0,
+    contas:[
+      {conta:'google',nome:'Gemini',moeda:'EUR',eurPorUnidade:1,calibrado,pedidos:7,
+       custoEur:calibrado?0.1700:null,estimadoEur:0.04,semMedida:calibrado?0:7,semMedidaEstEur:calibrado?0:0.04,
+       ultimaLeitura:'2026-09-22T09:00:00Z'},
+      {conta:'anthropic',nome:'Claude',moeda:'USD',eurPorUnidade:0.86,calibrado:cc,pedidos:2,
+       custoEur:cc?0.0223:null,estimadoEur:0.003,semMedida:cc?0:2,semMedidaEstEur:cc?0:0.003,
+       ultimaLeitura:cc?'2026-10-23T18:44:00Z':null}],
     porApp:[
       {app:'winecatalog',pedidos:4,ok:3,erro:1,tokensEntrada:14433,tokensSaida:505,
        tokensPensamento:0,pesquisas:4,custoEur:calibrado?0.0968:null,estimadoEur:0.04,
@@ -59,12 +76,14 @@ function resumo(calibrado){
        tokensPensamento:0,pesquisas:3,custoEur:calibrado?0.0955:null,estimadoEur:0.003,
        provisorio:false,ultimaChamada:'2026-09-20T14:32:19.117Z'}],
     porModelo:[
-      {modelo:'gemini-flash-lite-latest',pedidos:4,tokensEntrada:4120,tokensSaida:2046,
-       tokensPensamento:0,pesquisas:4,custoEur:calibrado?0.1213:null,estimadoEur:0.013},
-      {modelo:'gemini-flash-latest',pedidos:3,tokensEntrada:13296,tokensSaida:0,
-       tokensPensamento:0,pesquisas:3,custoEur:calibrado?0.0710:null,estimadoEur:0.03}],
-    janela:{pedidos:7,custoEur:calibrado?0.1923:null,estimadoEur:0.043},
-    total:{pedidos:7,custoEur:calibrado?0.1923:null,estimadoEur:0.043}};
+      {modelo:'gemini-flash-latest',conta:'google',pedidos:3,tokensEntrada:13296,tokensSaida:0,
+       tokensPensamento:0,pesquisas:3,custoEur:calibrado?0.0710:null,estimadoEur:0.03},
+      {modelo:'claude-haiku-5-5',conta:'anthropic',pedidos:2,tokensEntrada:9200,tokensSaida:1800,
+       tokensPensamento:0,pesquisas:3,custoEur:cc?0.0223:null,estimadoEur:0.003},
+      {modelo:'gemini-flash-lite-latest',conta:'google',pedidos:4,tokensEntrada:4120,tokensSaida:2046,
+       tokensPensamento:0,pesquisas:4,custoEur:calibrado?0.0990:null,estimadoEur:0.013}],
+    janela:{pedidos:9,custoEur:calibrado?(cc?0.1923:0.1700):null,estimadoEur:0.046,estimadoMedidoEur:cc?0.046:0.043},
+    total:{pedidos:9,custoEur:calibrado?(cc?0.1923:0.1700):null,estimadoEur:0.046,estimadoMedidoEur:cc?0.046:0.043}};
 }
 // Por app e por funcionalidade (db/funcionalidades.sql). A splitwisely
 // não chamou nada na janela: tem de aparecer como calada, e sem cartão.
@@ -101,22 +120,28 @@ const CUBO = (calibrado) => ({janelaDias:30,calibrado,linhas:[
 const JANELAS = [
   // A Google atrasou-se: a janela das chamadas deu 0,00 € e a seguinte
   // apareceu com o euro e sem chamadas — o `fatores()` juntou-as.
-  {leitura_id:5,de:'2026-09-30T08:00:00Z',ate:'2026-09-30T16:00:00Z',tipo:'saldo',
-   real_eur:0.09,chamadas:21,peso_total:0.0196,estimado_eur:0.02,fator:4.589,
+  {leitura_id:5,conta:'google',moeda:'EUR',de:'2026-09-30T08:00:00Z',ate:'2026-09-30T16:00:00Z',tipo:'saldo',
+   real_moeda:0.09,real_eur:0.09,chamadas:21,peso_total:0.0196,estimado_eur:0.02,fator:4.589,
    nota:null,desvio:3.5,leituras:2,pendente:false},
-  {leitura_id:6,de:'2026-09-30T16:00:00Z',ate:'2026-09-30T17:00:00Z',tipo:'saldo',
-   real_eur:0,chamadas:1,peso_total:0.001,estimado_eur:0.001,fator:null,
+  {leitura_id:6,conta:'google',moeda:'EUR',de:'2026-09-30T16:00:00Z',ate:'2026-09-30T17:00:00Z',tipo:'saldo',
+   real_moeda:0,real_eur:0,chamadas:1,peso_total:0.001,estimado_eur:0.001,fator:null,
    nota:null,desvio:-1,leituras:1,pendente:true},
-  {leitura_id:2,de:'2026-09-20T13:00:00Z',ate:'2026-09-22T09:00:00Z',tipo:'saldo',
-   real_eur:0.1923,chamadas:7,peso_total:0.18311,estimado_eur:0.043,fator:1.0502,
+  {leitura_id:2,conta:'google',moeda:'EUR',de:'2026-09-20T13:00:00Z',ate:'2026-09-22T09:00:00Z',tipo:'saldo',
+   real_moeda:0.1923,real_eur:0.1923,chamadas:7,peso_total:0.18311,estimado_eur:0.043,fator:1.0502,
    nota:'primeira leitura a sério',desvio:3.4721},
-  {leitura_id:3,de:'2026-09-22T09:00:00Z',ate:'2026-09-22T11:00:00Z',tipo:'gasto',
-   real_eur:null,chamadas:0,peso_total:0,estimado_eur:0,fator:null,nota:'troquei de feitio',desvio:null}
+  {leitura_id:3,conta:'google',moeda:'EUR',de:'2026-09-22T09:00:00Z',ate:'2026-09-22T11:00:00Z',tipo:'gasto',
+   real_moeda:null,real_eur:null,chamadas:0,peso_total:0,estimado_eur:0,fator:null,nota:'troquei de feitio',desvio:null},
+  // A primeira janela do Claude (23/10/2026): 5,00 $ → 4,36 $, a 0,86 € por dólar.
+  {leitura_id:91,conta:'anthropic',moeda:'USD',de:'2026-10-23T17:50:00Z',ate:'2026-10-23T18:44:00Z',tipo:'saldo',
+   real_moeda:0.64,real_eur:0.5504,chamadas:22,peso_total:0.6441,estimado_eur:0.5539,fator:0.8545,
+   nota:null,desvio:-0.0064,leituras:1,pendente:false}
 ];
 const LEITURAS = [
-  {id:3,lido_em:'2026-09-22T11:00:00Z',tipo:'gasto',valor_eur:1.2,carregado_eur:0,nota:'troquei de feitio'},
-  {id:2,lido_em:'2026-09-22T09:00:00Z',tipo:'saldo',valor_eur:49.81,carregado_eur:0,nota:null},
-  {id:1,lido_em:'2026-09-20T13:00:00Z',tipo:'saldo',valor_eur:50.0,carregado_eur:0,nota:'primeira leitura a sério'}
+  {id:91,conta:'anthropic',moeda:'USD',lido_em:'2026-10-23T18:44:00Z',tipo:'saldo',valor:4.36,carregado:0,nota:null},
+  {id:90,conta:'anthropic',moeda:'USD',lido_em:'2026-10-23T17:50:00Z',tipo:'saldo',valor:5.00,carregado:0,nota:'4,36 + 0,64 de hoje'},
+  {id:3,conta:'google',moeda:'EUR',lido_em:'2026-09-22T11:00:00Z',tipo:'gasto',valor:1.2,carregado:0,nota:'troquei de feitio'},
+  {id:2,conta:'google',moeda:'EUR',lido_em:'2026-09-22T09:00:00Z',tipo:'saldo',valor:49.81,carregado:0,nota:null},
+  {id:1,conta:'google',moeda:'EUR',lido_em:'2026-09-20T13:00:00Z',tipo:'saldo',valor:50.0,carregado:0,nota:'primeira leitura a sério'}
 ];
 // O que o catálogo de vinhos poupou (db/poupanca.sql) — cada ação na sua
 // unidade, porque campos, notas e vinhos não se somam.
@@ -135,7 +160,7 @@ const POUPANCA = {
 
 (async () => {
   await new Promise(r => srv.listen(8099, r));
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch({ executablePath: process.env.AIC_CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const page = await browser.newPage({ viewport: { width: 420, height: 900 } });
 
   const erros = [];
@@ -147,7 +172,7 @@ const POUPANCA = {
       erros.push('HTTP ' + r.status() + ' em ' + r.url());
   });
 
-  let CALIBRADO = false;
+  let CALIBRADO = false, CLAUDE = true;
   await page.route('**/auth/v1/user', r =>
     r.fulfill({ status: 200, contentType: 'application/json',
                 body: JSON.stringify({ id: 'u1', email: 'diogo.andre.f.silva@gmail.com' }) }));
@@ -155,7 +180,7 @@ const POUPANCA = {
     const fn = r.request().url().split('/rpc/')[1].split('?')[0];
     const args = JSON.parse(r.request().postData() || '{}');
     const custos = REGISTOS.filter(x => !args.p_app || x.app === args.p_app);
-    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO), resumo_apps: resumoApps(CALIBRADO), custos, custo_utilizadores: CUBO(CALIBRADO),
+    const mapa = { sou_admin: true, resumo_medido: resumo(CALIBRADO, CLAUDE), listar_contas: CONTAS, resumo_apps: resumoApps(CALIBRADO), custos, custo_utilizadores: CUBO(CALIBRADO),
                    janelas: JANELAS, listar_leituras: LEITURAS, listar_precos: PRECOS,
                    poupanca_catalogo: POUPANCA };
     if (!(fn in mapa)) return r.fulfill({ status: 404, body: '{"message":"fn desconhecida: ' + fn + '"}' });
@@ -182,7 +207,7 @@ const POUPANCA = {
   // Resumo por calibrar
   ok('aviso "sem leitura"', (await page.locator('#rs-aviso').innerText()).includes('leitura de saldo'));
   ok('medido a "—" sem calibração', (await page.locator('#rs-topo .hero-v').innerText()).trim() === '—');
-  ok('estimativa visível', (await page.locator('#rs-topo .hero-ev').innerText()).includes('0,04'));
+  ok('estimativa visível', (await page.locator('#rs-topo .hero-ev').innerText()).includes('0,05'));
   ok('custo por app: um cartão por app com uso', await page.locator('#rs-apps .cd').count() === 2);
   ok('app sem uso dita como calada', (await page.locator('#rs-apps .ap-cal').last().innerText()).includes('splitwisely'));
   ok('função que nunca registou à vista', (await page.locator('#rs-apps .aviso').innerText()).includes('fatura-ocr'));
@@ -217,8 +242,33 @@ const POUPANCA = {
      && (await page.locator('#rs-funcs .cd >> nth=0').innerText()).includes('3 Serper'));
   ok('vazios ditos na funcionalidade', (await page.locator('#rs-funcs').innerText()).includes('2 vazios'));
   ok('"poucos usos" num médio de 1 uso', await page.locator('#rs-funcs .cd >> nth=0').locator('.tag', { hasText: 'poucos usos' }).count() === 1);
-  ok('modelos em cartões, com o vazio marcado', await page.locator('#rs-modelos .cd').count() === 2);
+  ok('modelos em cartões, com o vazio marcado', await page.locator('#rs-modelos .cd').count() === 3);
+  // O Claude ao lado do Gemini: cada modelo diz de que conta é, o mais caro
+  // vem primeiro, e o pensamento do Claude não se lê como zero.
+  ok('cada modelo diz de que conta é', (await page.locator('#rs-modelos .cd-a').allInnerTexts())
+     .map(t => t.toLowerCase()).join('|') === 'gemini|gemini|claude');
+  ok('o modelo mais caro primeiro', (await page.locator('#rs-modelos .cd-n >> nth=0').innerText()) === 'gemini-flash-lite-latest');
+  ok('no Claude o pensamento vem na saída', (await page.locator('#rs-modelos .cd >> nth=2').innerText()).includes('na saída'));
+  ok('as pesquisas do modelo contadas', (await page.locator('#rs-modelos .cd >> nth=2').innerText()).includes('3 pesquisas'));
+  ok('o medido dividido pelas duas contas', (await page.locator('#rs-topo').innerText()).includes('Claude 0,02'));
   await page.screenshot({ path: '/tmp/aic-2-resumo.png', fullPage: true });
+
+  // A Google calibrada e a Anthropic não: o Claude fica fora do medido, e
+  // diz-se — com o botão que leva ao saldo dele.
+  CLAUDE = false;
+  await page.evaluate(() => rsCarregar());
+  await page.waitForTimeout(300);
+  ok('Claude sem leitura: dito em cima', (await page.locator('#rs-aviso').innerText()).includes('O Claude ainda não tem leitura de saldo'));
+  ok('Claude sem leitura: "por medir", não zero', (await page.locator('#rs-topo').innerText()).includes('Claude por medir'));
+  ok('Claude sem leitura: o desvio só das medidas', (await page.locator('#rs-topo .hero-dv').innerText()).toLowerCase().includes('curta'));
+  await page.screenshot({ path: '/tmp/aic-2a-resumo-claude-por-medir.png', fullPage: true });
+  await page.click('#rs-aviso button:has-text("Claude")');
+  await page.waitForTimeout(400);
+  ok('o botão abre o saldo do Claude', await page.locator('#t-saldo').isVisible()
+     && (await page.locator('#lt-conta-segs .seg.on').innerText()) === 'Claude');
+  CLAUDE = true;
+  await page.click('.it[data-tab="resumo"]');
+  await page.waitForTimeout(400);
 
   // A ficha de uma app: os números, o gráfico e as funcionalidades dela.
   await page.click('#rs-apps .cd >> nth=0');
@@ -337,6 +387,7 @@ const POUPANCA = {
   const ficha = await page.locator('#mr-corpo').innerText();
   ok('ficha explica o 200 vazio', ficha.includes('200 com o corpo vazio'));
   ok('ficha mostra finishReason', ficha.includes('MAX_TOKENS'));
+  ok('ficha diz a conta', /conta\s*gemini/i.test(ficha));
   ok('ficha traz o detalhe em bruto', (await page.locator('#mr-corpo pre.raw').innerText()).includes('usageMetadata'));
   await page.screenshot({ path: '/tmp/aic-4-ficha.png', fullPage: true });
   await page.keyboard.press('Escape');
@@ -345,6 +396,10 @@ const POUPANCA = {
 
   // Saldo
   await page.click('.it[data-tab="saldo"]');
+  await page.waitForTimeout(400);
+  // Ficou no Claude (o botão do Resumo): volta-se ao Gemini.
+  ok('uma escolha por conta', await page.locator('#lt-conta-segs .seg').count() === 2);
+  await page.click('#lt-conta-segs .seg[data-v="google"]');
   await page.waitForTimeout(400);
   ok('janelas desenhadas', await page.locator('#lt-janelas .li').count() === 4);
   ok('janela sem número marcada', await page.locator('#lt-janelas .tag.er').count() === 1);
@@ -355,7 +410,8 @@ const POUPANCA = {
      && (await page.locator('#lt-janelas').innerText()).includes('ainda não cobrou'));
   ok('última leitura à vista', (await page.locator('#lt-ultima').innerText()).includes('Última leitura'));
   ok('aviso das janelas más', (await page.locator('#lt-janelas .aviso').first().innerText()).includes('feitios diferentes'));
-  ok('3 leituras', await page.locator('#lt-lista .li').count() === 3);
+  ok('3 leituras (só as da Google)', await page.locator('#lt-lista .li').count() === 3);
+  ok('no Gemini em euros', (await page.locator('#t-saldo .lt-moeda >> nth=0').innerText()) === '€');
   ok('carregado visível em modo saldo', await page.locator('#lt-carr-box').isVisible());
   await page.click('#lt-tipo-segs .seg[data-v="gasto"]');
   await page.waitForTimeout(150);
@@ -365,11 +421,30 @@ const POUPANCA = {
   ok('sem zoom no viewport', (await page.locator('meta[name=viewport]').getAttribute('content')).includes('user-scalable=no'));
   ok('campos a 16px (o iOS não dá zoom)', await page.locator('#lt-nota').evaluate(e => getComputedStyle(e).fontSize) === '16px');
   await page.screenshot({ path: '/tmp/aic-5-saldo.png', fullPage: true });
+  // O Claude: em dólares, como a consola da Anthropic os mostra, e a janela
+  // em euros ao câmbio — com o dólar lido ao lado, para se conferir.
+  await page.click('#lt-conta-segs .seg[data-v="anthropic"]');
+  await page.waitForTimeout(400);
+  ok('Claude: só as janelas dele', await page.locator('#lt-janelas .li').count() === 1);
+  ok('Claude: a janela em euros, com os dólares lidos', (await page.locator('#lt-janelas .li-v').innerText()).includes('0,55 €')
+     && (await page.locator('#lt-janelas .li-s >> nth=0').innerText()).includes('lidos 0,64 $'));
+  ok('Claude: os valores em dólares', (await page.locator('#t-saldo .lt-moeda >> nth=0').innerText()) === '$'
+     && (await page.locator('#lt-lista .li-v >> nth=0').innerText()) === '4,36 $');
+  ok('Claude: só as leituras dele', await page.locator('#lt-lista .li').count() === 2);
+  ok('Claude: diz o câmbio', (await page.locator('#lt-intro').innerText()).includes('0,86 € por dólar'));
+  ok('Claude: última leitura em dólares', (await page.locator('#lt-ultima').innerText()).includes('4,36 $'));
+  await page.screenshot({ path: '/tmp/aic-5b-saldo-claude.png', fullPage: true });
+  await page.click('#lt-conta-segs .seg[data-v="google"]');
+  await page.waitForTimeout(300);
 
   // Definições
   await page.click('.it[data-tab="defs"]');
   await page.waitForTimeout(400);
-  ok('3 rácios', await page.locator('#pr-lista tbody tr').count() === 3);
+  ok('5 rácios, em duas contas', await page.locator('#pr-lista tbody tr:not(.pr-g)').count() === 5
+     && await page.locator('#pr-lista tbody tr.pr-g').count() === 2);
+  ok('os rácios do Claude ditos em dólares', (await page.locator('#pr-lista tr.pr-g >> nth=1').innerText()).toLowerCase().includes('dólares'));
+  ok('o câmbio do Claude à vista', await page.locator('#cb-lista input').count() === 1
+     && await page.locator('#cb-lista input').inputValue() === '0.86');
   ok('conta identificada', (await page.locator('#conta-email').innerText()).includes('diogo'));
   await page.screenshot({ path: '/tmp/aic-6-defs.png', fullPage: true });
 

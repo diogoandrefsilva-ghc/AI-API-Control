@@ -182,9 +182,16 @@
 
   <!-- ── SALDO ── -->
   <div id="t-saldo" class="tp">
+    <!-- Uma conta de cada vez: o Gemini paga-se à Google em euros, o Claude
+         à Anthropic em dólares, e cada uma tem as suas leituras e as suas
+         janelas. Os botões vêm de `ia_uso.listar_contas()`. -->
+    <div class="jan">
+      <span class="jan-l">Conta</span>
+      <div class="segs" id="lt-conta-segs"></div>
+    </div>
     <div class="card">
       <h2>Registar uma leitura</h2>
-      <p class="nota">O que o painel da Google diz agora. Entre esta leitura
+      <p class="nota" id="lt-intro">O que a consola diz agora. Entre esta leitura
         e a anterior há um euro observado — e é ele que reparte o custo pelas
         chamadas que caíram no meio.</p>
       <div id="lt-ultima"></div>
@@ -199,7 +206,7 @@
       <label for="lt-valor">Valor na conta</label>
       <div class="eur-in">
         <input id="lt-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
-        <span>€</span>
+        <span class="lt-moeda">€</span>
       </div>
       <p class="nota" id="lt-dica"></p>
       <div class="fgrid">
@@ -207,7 +214,7 @@
           <label for="lt-carregado">Carregado desde a última</label>
           <div class="eur-in pq">
             <input id="lt-carregado" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00">
-            <span>€</span>
+            <span class="lt-moeda">€</span>
           </div>
         </div>
         <div class="fl">
@@ -229,12 +236,22 @@
   <div id="t-defs" class="tp">
     <div class="card">
       <h2>Rácios por modelo</h2>
-      <p class="nota">Não são a tabela de preços da Google e não têm de bater
-        certo com ela — só importa a <b>proporção</b> entre eles. A escala vem
-        toda do fator de cada janela, e é isso que os torna seguros de errar.
-        A linha <code>*</code> é a de recurso, para um modelo que apareça sem
-        estar aqui.</p>
+      <p class="nota">Não são a tabela de preços e não têm de bater certo
+        com ela — só importa a <b>proporção</b> entre eles, e só <b>dentro da
+        mesma conta</b>: o Gemini compara-se com o Gemini, o Claude com o
+        Claude. A escala vem toda do fator de cada janela, e é isso que os
+        torna seguros de errar. Um <code>*</code> é um padrão: o
+        <code>*</code> sozinho é a linha de recurso da Google, e o
+        <code>claude-*</code> apanha um Claude que apareça sem estar aqui.</p>
       <div id="pr-lista"></div>
+    </div>
+    <div class="card">
+      <h2>Câmbio</h2>
+      <p class="nota">O crédito da Anthropic é em <b>dólares</b> e pré-pago:
+        o euro que custou cada dólar foi o que o banco cobrou no carregamento.
+        Põe aqui esse câmbio. Mudá-lo refaz o euro de todas as janelas da
+        conta — é a mesma suposição para todas.</p>
+      <div id="cb-lista"></div>
     </div>
     <div class="card">
       <h2>Conta</h2>
