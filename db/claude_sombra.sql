@@ -16,9 +16,14 @@
 -- conta tinha dólares e nenhuma chamada a quem os dar, e o Claude começava
 -- a ser medido sem o teste que decidiu entre o Haiku e o Sonnet.
 --
--- SÓ AS DA SOMBRA: até ao deploy da `vinho-info` das 18:44 UTC desse dia.
--- Daí para a frente quem escreve no `ia_uso` é a própria function, e uma
--- comparação nova copiada daqui era a mesma chamada contada duas vezes.
+-- E AS DO MULTI ATÉ AO DEPLOY QUE AS GRAVA. A `vinho-info` das 18:44 UTC
+-- desse dia pôs o Claude a sério (o multi-modelo do admin), mas continuou
+-- a deixá-lo fora do `ia_uso` até a calibração saber de contas. As 19
+-- chamadas do multi dessa tarde só ficaram na `ia_comparacao` (a do Claude
+-- de cada procura, as duas fases à parte), e a conta da Anthropic pagou-as.
+-- A `vinho-info` que as escreve no `ia_uso` entrou às 22:19:43 UTC (a
+-- versão 74): daí para a frente é a própria function, e uma comparação
+-- nova copiada daqui era a mesma chamada contada duas vezes.
 --
 -- Como a function escreve: `app` garrafeira, `funcao` vinho-info, a
 -- `funcionalidade` que a comparação gravou, os tokens do `usage` (o
@@ -46,14 +51,15 @@ BEGIN
                * (SELECT k.eur_por_unidade FROM ia_uso.contas k WHERE k.conta = 'anthropic'), 6),
          (x ->> 'ms')::int, c.quem, left(x ->> 'erro', 500),
          jsonb_build_object(
-           'origem', 'ia_comparacao', 'ia_comparacao_id', c.id, 'sombra', true,
+           'origem', 'ia_comparacao', 'ia_comparacao_id', c.id,
+           'sombra', c.criado_em < '2026-10-23 18:44:23+00',
            'fase', c.fase, 'nome', c.nome, 'ano', c.ano, 'modelo', x ->> 'modelo',
            'pesquisas', COALESCE((x ->> 'pesquisas')::int, 0),
            'custo_usd', (x ->> 'custo_usd')::numeric, 'stop_reason', x ->> 'stop_reason')
     FROM garrafeira.ia_comparacao c
     CROSS JOIN LATERAL jsonb_array_elements(
       CASE WHEN jsonb_typeof(c.claude) = 'array' THEN c.claude ELSE '[]'::jsonb END) x
-   WHERE c.criado_em < '2026-10-23 18:44:23+00'
+   WHERE c.criado_em < '2026-10-23 22:19:43+00'
      AND x ->> 'modelo' LIKE 'claude%'
      AND NOT EXISTS (
        SELECT 1 FROM ia_uso.registos r
@@ -63,6 +69,9 @@ BEGIN
 END $$;
 
 -- ── Conferir depois de correr ──────────────────────────────────────────
--- select modelo, count(*), sum((detalhe->>'custo_usd')::numeric) as usd
+-- select modelo, detalhe->>'sombra' as sombra, count(*),
+--        sum((detalhe->>'custo_usd')::numeric) as usd
 --   from ia_uso.registos where detalhe->>'origem' = 'ia_comparacao'
---  group by 1;                                   -- 11 + 11, 0,064 + 0,580 $
+--  group by 1, 2;
+-- A sombra: 11 Haiku + 11 Sonnet, 0,064 + 0,580 $. O multi: 19 Haiku,
+-- 0,131 $ (2 em erro, a 0 tokens).
