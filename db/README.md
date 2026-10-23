@@ -16,17 +16,23 @@ quem herdasse essa app o poder sobre a tabela que mede as outras.
 | # | ficheiro | o que traz |
 |---|---|---|
 | 1 | `ia_uso.sql` | o registo: `config`, `registos`, `sou_admin()`, `listar()`, `resumo()` |
-| 2 | `calibracao.sql` | o euro medido: `leituras`, `precos`, `fatores()`, `calc()`, `janelas()`, `custos()`, `resumo_medido()` |
+| 2 | `calibracao.sql` | o euro medido: `contas` (Google e Anthropic), `leituras`, `precos`, `pesadas()`, `fatores()`, `calc()`, `janelas()`, `custos()`, `resumo_medido()` |
 | 3 | `poupanca.sql` | o que o catálogo de vinhos poupou: `poupanca_catalogo()` |
 | 4 | `funcionalidades.sql` | o custo por app e por funcionalidade: a coluna `registos.funcionalidade`, `funcionalidades` (os nomes), `funcionalidade()`, `resumo_apps()` |
 | 5 | `utilizadores.sql` | o custo por utilizador: `custo_utilizadores()`, o cubo dia × app × utilizador |
+| 6 | `claude_sombra.sql` | as 22 chamadas ao Claude do primeiro dia (23/10/2026), que só ficaram em `garrafeira.ia_comparacao` |
 
-Os cinco são **idempotentes** — correm as vezes que forem precisas. O 2
+Os seis são **idempotentes** — correm as vezes que forem precisas. O 6
+depende do 2 e da `garrafeira.ia_comparacao` (sem ela não faz nada). O 2
 depende do 1, o 4 e o 5 do 1 e do 2 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
 do 1 e da vista `winecatalog.consumo`, que é da WineCatalog
 (`WineCatalog/db/catalogo.sql`) — é a única coisa deste painel que não sai
 da `registos`, porque um pedido servido pelo catálogo não chamou o Gemini e
 por isso não deixou linha aqui.
+
+`aplicar-duas-contas.sql` não entra na ordem: é o 2 e o 6 de 23/10/2026
+juntos numa transação, com as duas leituras do Claude desse dia, para colar
+**uma vez** no SQL Editor. Mexer no schema é mexer no 2 e no 6, nunca nele.
 
 ## Passos manuais no painel do Supabase
 
@@ -95,6 +101,28 @@ Todas as Edge Functions escrevem a `ia_uso.registos` **da mesma maneira** —
   funcionalidades na `ia_uso.funcionalidades`. Sem isso aparece no painel em
   "Funções sem regra" — e uma função listada que nunca escreveu aparece em
   "Nunca registaram".
+
+### O Claude (23/10/2026)
+
+O mesmo contrato, com três coisas a mais — é o que deixa o crédito da
+Anthropic repartir-se só pelas chamadas do Claude:
+
+- **uma linha é de UMA conta**. O `modelo` é o id tal e qual
+  (`claude-haiku-5-5`); é por ele que a `ia_uso.precos` diz que a linha é da
+  Anthropic. Uma procura que correu o Gemini E o Claude grava **duas
+  linhas**, uma por conta, cada uma com os tokens dela. Uma linha
+  "gemini-… + claude-…" fica sem euro e aparece no Resumo como mistura;
+- os tokens vêm do `usage`: `input_tokens` → `tokens_entrada`,
+  `output_tokens` → `tokens_saida` (o pensamento já vem lá dentro, por isso
+  `tokens_pensamento` vai a 0), somados pelas voltas de um `pause_turn`;
+- **`detalhe.pesquisas`** (número): quantas pesquisas o Claude fez na
+  chamada (`usage.server_tool_use.web_search_requests`). Paga-se cada uma,
+  e é este número que a `ia_uso.pesquisas()` conta.
+
+A `vinho-info` deixou o Claude fora do `ia_uso` até a calibração saber de
+contas (a linha `if (/claude/i.test(...)) return;` antes da
+`registarIaUso()`). Com o `calibracao.sql` corrido, essa linha sai — e a
+linha do Claude passa a levar o `pesquisas`.
 
 **A ORDEM do deploy importa**: o `funcionalidades.sql` corre ANTES de se
 fazer deploy de uma function que grave a coluna. Ao contrário, o PostgREST
