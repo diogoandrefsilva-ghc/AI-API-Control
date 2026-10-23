@@ -1,6 +1,7 @@
 # AI-API-Control — guia para o assistente
 
-Painel de controlo do que as apps pessoais gastam na API do Gemini.
+Painel de controlo do que as apps pessoais gastam na API do Gemini e,
+desde 23/10/2026, na do Claude (ver "Duas contas").
 **Sem build, sem npm.** Site estático (GitHub Pages), PWA. Lê o schema
 `ia_uso` do projeto Supabase partilhado (`gjweqwfbnkgnibhajldc`).
 
@@ -86,6 +87,52 @@ estimativa.** NÃO se cai para o `custo_estimado_eur` às escondidas: um
 número medido e um número adivinhado não se somam na mesma coluna sem se
 dizer qual é qual. É a mesma regra da nota pesquisada vs. o palpite no
 catálogo da WineCatalog.
+
+## Duas contas: o Gemini e o Claude (23/10/2026)
+O dono: "agora tenho também o Claude API, além do Gemini… quer no registo
+do saldo, quer no controlo do custo de cada modelo". O Claude entrou na
+`vinho-info` (Garrafeira) nesse dia, depois de um teste à sombra com o
+Haiku e o Sonnet.
+- **Uma conta é um saldo que se lê** (`ia_uso.contas`): `google` (Gemini,
+  euros) e `anthropic` (Claude, **dólares**). Cada leitura é de uma conta,
+  as janelas emparelham-se DENTRO da conta, e **uma chamada só leva euros
+  da conta que a cobrou**. Com uma conta só, o saldo da Google era
+  repartido por todas as linhas — e uma linha do Claude levava euros da
+  Google. Foi por isso que a `vinho-info` deixou o Claude fora do `ia_uso`
+  até isto existir. A invariante passa a ser por conta.
+- **De que conta é uma chamada diz a `precos`** (`precos.conta`), pelo
+  modelo — `ia_uso.conta_de()`. Um `*` no modelo é um padrão: `claude-*`
+  apanha um Claude novo que ninguém lá pôs. Sem ele, ia pelo `*` de
+  recurso, que é da Google. Uma linha "a + b" que misture as duas contas
+  fica sem euro (`mistas` no resumo): os tokens dela são de dois saldos.
+- **A leitura é na moeda da conta** (`leituras.valor`, `carregado` — até
+  23/10/2026 eram `valor_eur`/`carregado_eur`, e com dólares o nome
+  mentia). O `contas.eur_por_unidade` converte DEPOIS de subtrair as duas
+  leituras, nunca antes: converter cada uma ao câmbio do dia metia a
+  flutuação do câmbio no gasto. É um câmbio fixo e à vista (Definições):
+  o crédito da Anthropic é pré-pago, e o euro de cada dólar foi o que o
+  banco cobrou no carregamento. Mudá-lo refaz todas as janelas da conta.
+- **Os rácios só se comparam dentro da conta**: os do Claude são a tabela
+  da Anthropic em dólares tal e qual, ao lado dos do Gemini em euros — cada
+  conta tem o seu fator, e nunca se dividem um pelo outro.
+- **A pesquisa do Claude paga-se POR PESQUISA** (0,01 $ cada, até cinco
+  numa chamada); a da Google por PEDIDO com grounding. A chamada que sabe
+  quantas fez grava `detalhe.pesquisas` (número), e a `ia_uso.pesquisas()`
+  lê-o antes de qualquer regra.
+- **No Claude o pensamento vem DENTRO da saída** (o `usage` não o separa):
+  `tokens_pensamento` a 0 e o ecrã diz "na saída", não "0".
+- **Uma conta sem leituras não se cala**: com a outra calibrada, o medido
+  de cima só soma a que tem, e o Resumo diz quantas chamadas ficaram de
+  fora e quanto valiam pela estimativa (`contas[].semMedida`). O desvio da
+  estimativa mede-se só contra as chamadas medidas (`estimadoMedidoEur`).
+- **O preço e a conta procuram-se uma vez por MODELO** (`ia_uso.pesadas()`),
+  não por linha. Por linha, o `calc()` ia de 0,8 s a 2,2 s; com o CTE sem
+  `MATERIALIZED` chegou aos 21 s. Mexer ali é medir antes e depois.
+- **O primeiro dia** (`db/claude_sombra.sql`): as 22 chamadas da sombra
+  (11 Haiku, 11 Sonnet) só ficaram em `garrafeira.ia_comparacao`, e foram
+  elas os 0,64 $ desse dia. Trazem-se para cá, só as de antes do deploy das
+  18:44 UTC — daí para a frente escreve a function.
+- O Saldo mostra **uma conta de cada vez** (`aic_conta` no `localStorage`).
 
 ## A pesquisa Google decide-se AQUI, não nas nove functions
 A `registos.pesquisa_web` nunca teve um significado definido, e as nove

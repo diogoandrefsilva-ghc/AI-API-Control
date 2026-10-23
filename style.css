@@ -222,6 +222,10 @@ th{
   font-weight:600;white-space:nowrap;
 }
 td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* O cabeçalho de cada conta nos rácios: diz em que moeda estão os números
+   de baixo — é só entre eles que a proporção conta. */
+tr.pr-g td{background:var(--bg);color:var(--mu);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;padding-top:10px;white-space:normal}
 tr:last-child td{border-bottom:none}
 .t-app{font-weight:600;white-space:nowrap}
 .t-sub{display:block;color:var(--mu);font-size:11.5px;font-family:inherit}
@@ -402,6 +406,7 @@ tr:last-child td{border-bottom:none}
 /* O "Carregado" e o "Quando" não cabem lado a lado num telemóvel: a
    data cortava a meio da hora. Cada um na sua linha, abaixo de 440px. */
 #t-saldo .fgrid .fl{flex-basis:200px}
+#cb-lista .fl{margin-bottom:12px}
 .segs-w{display:flex;margin-bottom:16px}
 .segs-w .seg{flex:1 1 0;padding:8px 6px;font-size:13.5px;font-weight:600}
 /* O valor lido é o que se veio escrever: grande, com o € colado. */

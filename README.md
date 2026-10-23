@@ -1,6 +1,7 @@
 # AI-API-Control
 
-Painel de controlo do que as apps pessoais gastam na API do Gemini.
+Painel de controlo do que as apps pessoais gastam na API do Gemini e na
+do Claude.
 
 **Sem build, sem npm.** Site estático (GitHub Pages), PWA. Lê o schema
 `ia_uso` do projeto Supabase partilhado (`gjweqwfbnkgnibhajldc`) — o
@@ -37,6 +38,11 @@ reconcilia os dois.
 **A soma das chamadas de uma janela dá exactamente o saldo lido** — por
 construção, não por arredondamento. É a mesma regra que segura a divisão
 da fatura no SplitBill e o rateio das compras no FestasBV.
+
+**Duas contas, cada uma com o seu saldo**: a da Google paga o Gemini (em
+euros), a da Anthropic paga o Claude (em dólares, convertidos a um câmbio
+que se acerta em Definições). As leituras, as janelas e o fator são de
+cada conta, e uma chamada só leva euros da conta que a cobrou.
 
 O detalhe todo, com o que isto **não** consegue dizer, está em
 `db/calibracao.sql` e no `CLAUDE.md`.

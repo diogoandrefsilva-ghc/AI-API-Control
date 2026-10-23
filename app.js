@@ -171,18 +171,24 @@ function nFmt(n){
    custa milésimos, e ao cêntimo aparecia toda a 0,00 € — que é dizer que
    não custou nada. Nunca as mistures na mesma coluna: com casas
    diferentes por linha, a coluna deixa de alinhar e de se ler. */
-function eurFmt(n,casas){
+function eurFmt(n,casas){return moedaFmt(n,'EUR',casas);}
+/* O mesmo na moeda de uma CONTA: o crédito da Anthropic lê-se em dólares,
+   e uma leitura escreve-se como a consola a mostra. Tudo o que é repartido
+   pelas chamadas já vem em euros — isto é só para o que se leu. */
+const MOEDA_SIMB={EUR:'€',USD:'$'};
+function moedaFmt(n,moeda,casas){
   if(n==null||n==='')return '—';
   const x=Number(n);
   if(!isFinite(x))return '—';
   const c=casas==null?2:casas;
+  const s=' '+(MOEDA_SIMB[moeda]||'€');
   /* Um valor que EXISTE mas arredonda a zero não se escreve "0,00 €" —
      isso lê-se como "não custou nada", e há sempre parcelas pequenas numa
      coluna de totais. Diz-se que é menor do que a menor casa que se está
      a mostrar, que é a verdade. */
   const menor=Math.pow(10,-c);
-  if(x>0&&x<menor/2)return '< '+menor.toLocaleString('pt-PT',{minimumFractionDigits:c,maximumFractionDigits:c})+' €';
-  return x.toLocaleString('pt-PT',{minimumFractionDigits:c,maximumFractionDigits:c})+' €';
+  if(x>0&&x<menor/2)return '< '+menor.toLocaleString('pt-PT',{minimumFractionDigits:c,maximumFractionDigits:c})+s;
+  return x.toLocaleString('pt-PT',{minimumFractionDigits:c,maximumFractionDigits:c})+s;
 }
 /* Vírgula, como tudo o resto. O `toFixed()` devolve SEMPRE ponto e numa
    coluna ao lado de "0,19 €" isso lê-se como outro número. */
@@ -356,13 +362,32 @@ function rsDesenhar(){
   const tot=d.total||{},jan=d.janela||{};
 
   /* ── O aviso: o que o painel NÃO sabe ── */
+  const cs=Array.isArray(d.contas)?d.contas:[];
+  contasGuardar(cs);
   let av='';
   if(!cal){
     av+='<div class="aviso"><b>Ainda não há leitura de saldo nenhuma.</b> '
       + 'Sem ela o euro não se consegue medir, e o que se mostra aqui é a '
       + '<b>estimativa</b> que cada Edge Function grava — constantes escritas '
       + 'à mão, sem a pesquisa Google lá dentro. '
-      + '<button class="mini" onclick="itab(\'saldo\')">Registar o saldo da conta Google</button></div>';
+      + '<button class="mini" onclick="itab(\'saldo\')">Registar um saldo</button></div>';
+  }
+  /* Uma conta calibrada e a outra não: o medido de cima só soma a que tem
+     leituras. Dito, e com quanto ficou de fora — calado, a conta nova
+     descia o total sozinha. */
+  for(let i=0;i<cs.length;i++){
+    const k=cs[i];
+    if(!cal||!(Number(k.semMedida)>0))continue;
+    av+='<div class="aviso"><b>O '+esc(k.nome)+' ainda não tem leitura de saldo.</b> '
+      + nFmt(k.semMedida)+(Number(k.semMedida)===1?' chamada':' chamadas')+' nestes '+RS_DIAS+' dias '
+      + '(≈ <span class="eur-est">'+esc(eurFmt(k.semMedidaEstEur,2))+'</span> pela estimativa) ficam '
+      + '<b>fora</b> do gasto medido: não há um saldo dessa conta por onde as medir. '
+      + '<button class="mini" onclick="rsLerConta('+i+')">Registar o saldo do '+esc(k.nome)+'</button></div>';
+  }
+  if(Number(d.mistas)>0){
+    av+='<div class="aviso"><b>'+nFmt(d.mistas)+(Number(d.mistas)===1?' chamada mistura':' chamadas misturam')
+      + ' o Gemini e o Claude na mesma linha.</b> Os tokens delas são de dois saldos somados e não há '
+      + 'como os separar, por isso ficam sem euro medido. A function tem de gravar uma linha por conta.</div>';
   }
   const sr=Array.isArray(d.semRegra)?d.semRegra:[];
   if(sr.length){
@@ -382,6 +407,14 @@ function rsDesenhar(){
      "desde sempre" fica em letra pequena. */
   const medido=cal?eurFmt(jan.custoEur,2):null;
   const porChamada=cal&&Number(jan.pedidos)>0&&jan.custoEur!=null?Number(jan.custoEur)/Number(jan.pedidos):null;
+  /* Com as duas contas em uso, quanto é de cada uma. Uma sem leituras diz
+     "por medir" e não um zero — o aviso de cima diz porquê. */
+  const usadas=cs.filter(function(k){return Number(k.pedidos)>0;});
+  const porConta=cal&&usadas.length>1
+    ? '<div class="hero-s">'+usadas.map(function(k){
+        return '<span>'+esc(k.nome)+' '+(k.calibrado&&k.custoEur!=null?esc(eurFmt(k.custoEur,2)):'por medir')+'</span>';
+      }).join('')+'</div>'
+    : '';
   document.getElementById('rs-topo').innerHTML=
     '<div class="hero">'
     + '<div class="hero-l">Gasto medido · '+RS_DIAS+' dias</div>'
@@ -391,6 +424,7 @@ function rsDesenhar(){
     + '<div class="hero-s"><span>'+nFmt(jan.pedidos)+' chamadas</span>'
     +   (porChamada!=null?'<span>'+esc(eurFmt(porChamada,4))+' cada, em média</span>':'')
     +   '<span>'+(cal?'desde sempre '+esc(eurFmt(tot.custoEur,2)):'por calibrar')+'</span></div>'
+    + porConta
     + '<div class="hero-est"><div class="hero-l">Estimativa das functions</div>'
     +   '<div class="hero-er"><span class="hero-ev">'+esc(eurFmt(jan.estimadoEur,2))+'</span>'
     +   '<span class="hero-dv">'+rsDesvioTxt(jan)+'</span></div>'
@@ -400,9 +434,14 @@ function rsDesenhar(){
      Cartões como os das apps, mas sem ficha (não há mais nada a dizer de
      um modelo do que isto). Os tokens vão em três números lado a lado: a
      SAÍDA a zero com a entrada aos milhares é o 200 vazio. */
-  const ms=Array.isArray(d.porModelo)?d.porModelo:[];
+  /* O mais caro primeiro, como as apps: com o Claude ao lado do Gemini, a
+     pergunta passou a ser também QUAL modelo, e isso lê-se pelo euro. */
+  const vm=function(m){return Number((cal?m.custoEur:m.estimadoEur)||0);};
+  const ms=(Array.isArray(d.porModelo)?d.porModelo:[]).slice().sort(function(a,b){
+    return vm(b)-vm(a)||Number(b.pedidos||0)-Number(a.pedidos||0);
+  });
   let totM=0;
-  for(let i=0;i<ms.length;i++)totM+=Number((cal?ms[i].custoEur:ms[i].estimadoEur)||0);
+  for(let i=0;i<ms.length;i++)totM+=vm(ms[i]);
   let hm='<div class="sec-h"><h2>Por modelo</h2><span>'+(cal?'medido':'pela estimativa')+' · '+RS_DIAS+' dias</span></div>'
     + '<p class="nota sec-p">A pergunta a que isto responde é se o modelo barato chega. '
     + 'A <b>saída</b> a zero com a entrada aos milhares é o 200 vazio: pagou-se e não veio nada.</p>';
@@ -413,34 +452,48 @@ function rsDesenhar(){
     const v=cal?m.custoEur:m.estimadoEur,cls=cal?'eur-med':'eur-est';
     const quota=totM>0&&v!=null?Number(v)/totM:0;
     const semSaida=Number(m.tokensSaida||0)===0&&Number(m.tokensEntrada||0)>0;
+    /* O Claude não separa o pensamento: vem dentro dos tokens de saída, e
+       um "0" ali lia-se como "não pensou". */
+    const pensaNaSaida=m.conta==='anthropic';
     hm+='<div class="cd cd-st">'
+      + '<div class="cd-a">'+esc(contaNome(m.conta))+'</div>'
       + '<div class="cd-top"><span class="cd-n">'+esc(m.modelo)+'</span>'
       +   '<span class="cd-p">'+(totM>0?Math.round(quota*100)+'%':'')+'</span></div>'
       + '<div class="cd-e '+cls+'">'+(v==null?'—':esc(eurFmt(v,2)))+'</div>'
       + '<div class="bar'+(cal?'':' est')+'"><i style="width:'+(quota*100).toFixed(1)+'%"></i></div>'
-      + '<div class="cd-s">'+nFmt(m.pedidos)+' chamadas</div>'
+      + '<div class="cd-s">'+nFmt(m.pedidos)+' chamadas'
+      +   (Number(m.pesquisas)>0?' · '+nFmt(m.pesquisas)+(Number(m.pesquisas)===1?' pesquisa':' pesquisas'):'')+'</div>'
       + '<div class="tk">'
       +   '<div><span>Entrada</span><b>'+nFmt(m.tokensEntrada)+'</b></div>'
       +   '<div><span>Saída</span><b>'+nFmt(m.tokensSaida)+(semSaida?'<i class="tag wn">vazio</i>':'')+'</b></div>'
-      +   '<div><span>Pensam.</span><b>'+nFmt(m.tokensPensamento)+'</b></div>'
+      +   '<div><span>Pensam.</span><b'+(pensaNaSaida?' class="t-mu">na saída':'>'+nFmt(m.tokensPensamento))+'</b></div>'
       + '</div></div>';
   }
   if(ms.length)hm+='</div>';
-  hm+='<p class="nota sec-n">Os <b>tokens são facto</b> — vêm do '
-    + '<code>usageMetadata</code> da API. O euro medido é a repartição de um saldo '
-    + 'real pelos tokens, e a repartição dentro de cada janela depende dos rácios '
-    + 'em Definições. O total de uma janela está certo; a chamada individual está '
-    + 'tão certa quanto os rácios estiverem.</p>';
+  hm+='<p class="nota sec-n">Os <b>tokens são facto</b> — vêm da API (o '
+    + '<code>usageMetadata</code> do Gemini, o <code>usage</code> do Claude). O euro medido '
+    + 'é a repartição do saldo de cada conta pelos tokens das chamadas dela — o da Google '
+    + 'pelo Gemini, o da Anthropic pelo Claude —, e a repartição dentro de cada janela '
+    + 'depende dos rácios em Definições. O total de uma janela está certo; a chamada '
+    + 'individual está tão certa quanto os rácios estiverem.</p>';
   document.getElementById('rs-modelos').innerHTML=hm;
 }
 
+/* Só contra a estimativa das chamadas que TÊM euro medido: contra a de
+   todas, uma conta ainda sem leituras punha a estimativa a parecer longa. */
 function rsDesvioTxt(tot){
   if(!RS_DADOS||!RS_DADOS.calibrado)return 'sem medição para comparar';
-  const e=Number(tot.estimadoEur||0),m=Number(tot.custoEur||0);
+  const e=Number((tot.estimadoMedidoEur!=null?tot.estimadoMedidoEur:tot.estimadoEur)||0),m=Number(tot.custoEur||0);
   if(!(e>0))return 'a estimativa não diz nada';
   const dv=(m-e)/e;
   if(Math.abs(dv)<0.05)return 'a estimativa estava certa';
   return 'a estimativa estava '+(dv>0?'CURTA':'LONGA')+' '+decFmt(Math.abs(dv)*100,0)+'%';
+}
+
+/* O botão do aviso de uma conta sem leituras: vai ao Saldo já nela. */
+function rsLerConta(i){
+  const k=RS_DADOS&&Array.isArray(RS_DADOS.contas)?RS_DADOS.contas[i]:null;
+  if(k)ltAbrir(k.conta);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1353,10 +1406,12 @@ function rgFicha(r){
     + '<dt>Quando</dt><dd>'+esc(new Date(r.criado_em).toLocaleString('pt-PT'))+'</dd>'
     + '<dt>Estado</dt><dd>'+esc(r.estado)+(vazio?' — 200 vazio':'')+'</dd>'
     + '<dt>Modelo</dt><dd>'+esc(r.modelo||'—')+'</dd>'
+    + ('conta' in r?'<dt>Conta</dt><dd>'+esc(contaNome(r.conta))+'</dd>':'')
     + (fr?'<dt>finishReason</dt><dd>'+esc(fr)+'</dd>':'')
     + '<dt>Entrada</dt><dd>'+nFmt(r.tokens_entrada)+'</dd>'
     + '<dt>Saída</dt><dd>'+nFmt(r.tokens_saida)+'</dd>'
-    + '<dt>Pensamento</dt><dd>'+nFmt(r.tokens_pensamento)+'</dd>'
+    + '<dt>Pensamento</dt><dd>'+(r.conta==='anthropic'?'na saída':nFmt(r.tokens_pensamento))+'</dd>'
+    + (Number(r.detalhe&&r.detalhe.pesquisas)>0?'<dt>Pesquisas</dt><dd>'+nFmt(r.detalhe.pesquisas)+'</dd>':'')
     + '<dt>Duração</dt><dd>'+(r.duracao_ms==null?'—':nFmt(r.duracao_ms)+' ms')+'</dd>'
     + '<dt>Peso</dt><dd>'+decFmt(r.peso,6)+'</dd>'
     + '<dt>Custo medido</dt><dd>'+(r.custo_eur==null?'— (sem calibração)':esc(eurFmt(r.custo_eur,4))
@@ -1384,7 +1439,52 @@ function rgFicha(r){
 
 /* ══════════════════════════════════════════════════════════════════
    SALDO — as leituras e a calibração
-   ══════════════════════════════════════════════════════════════════ */
+   ══════════════════════════════════════════════════════════════════
+   UMA CONTA DE CADA VEZ (23/10/2026): a Google (o Gemini, em euros) e a
+   Anthropic (o Claude, em dólares). As leituras emparelham-se dentro da
+   conta, e o ecrã mostra só as da que está escolhida — misturadas, uma
+   janela entre um saldo em euros e um crédito em dólares não queria dizer
+   nada. A escolha fica no `localStorage` (`aic_conta`): conveniência, não
+   estado. */
+let LT_CONTAS=[];
+let LT_CONTA='google';
+try{LT_CONTA=localStorage.getItem('aic_conta')||'google';}catch(e){}
+/* O nome de cada conta para quem só tem a chave. Vem da base quando ela
+   responde; até lá, estes. */
+let CONTA_NOMES={google:'Gemini',anthropic:'Claude'};
+function contasGuardar(ks){
+  if(!Array.isArray(ks))return;
+  for(let i=0;i<ks.length;i++)if(ks[i].conta&&ks[i].nome)CONTA_NOMES[ks[i].conta]=ks[i].nome;
+}
+function contaNome(c){return c==null?'duas contas':(CONTA_NOMES[c]||c);}
+function ltContaDe(c){
+  for(let i=0;i<LT_CONTAS.length;i++)if(LT_CONTAS[i].conta===c)return LT_CONTAS[i];
+  return {conta:c,nome:contaNome(c),moeda:'EUR',eur_por_unidade:1};
+}
+function ltConta(i){
+  const k=LT_CONTAS[i];if(!k)return;
+  LT_CONTA=k.conta;
+  try{localStorage.setItem('aic_conta',k.conta);}catch(e){}
+  document.getElementById('lt-valor').value='';
+  document.getElementById('lt-carregado').value='';
+  ltCarregar();
+}
+/* Abrir o Saldo já na conta que falta ler (é o que o aviso do Resumo faz). */
+function ltAbrir(conta){
+  LT_CONTA=conta;
+  try{localStorage.setItem('aic_conta',conta);}catch(e){}
+  itab('saldo');
+}
+function ltSegs(){
+  let h='';
+  for(let i=0;i<LT_CONTAS.length;i++){
+    const k=LT_CONTAS[i];
+    h+='<button class="seg'+(k.conta===LT_CONTA?' on':'')+'" data-v="'+esc(k.conta)+'" onclick="ltConta('+i+')">'
+      + esc(k.nome)+'</button>';
+  }
+  document.getElementById('lt-conta-segs').innerHTML=h;
+}
+
 function ltTipo(t){
   document.getElementById('lt-tipo').value=t;
   const bs=document.querySelectorAll('#lt-tipo-segs .seg');
@@ -1401,8 +1501,18 @@ function ltSync(){
   document.getElementById('lt-dica').innerHTML=(tipo==='saldo')
     ? 'Quanto <b>resta</b> na conta agora. Se carregaste a conta desde a última leitura, '
       + 'diz quanto — sem isso o saldo sobe e a janela dá negativa.'
-    : 'Quanto já se <b>gastou</b> no período que a Google mostra. Se o contador virou o '
+    : 'Quanto já se <b>gastou</b> no período que a consola mostra. Se o contador virou o '
       + 'mês e voltou a zero, o valor de agora é lido como o gasto desde a viragem.';
+  /* Na moeda da conta, como a consola a mostra: reescrever dólares em
+     euros à mão era mais uma conta para errar. O câmbio entra na janela. */
+  const k=ltContaDe(LT_CONTA),fora=k.moeda!=='EUR';
+  const ms=document.querySelectorAll('#t-saldo .lt-moeda');
+  for(let i=0;i<ms.length;i++)ms[i].textContent=MOEDA_SIMB[k.moeda]||'€';
+  document.getElementById('lt-intro').innerHTML='O que a consola diz agora'
+    + (fora?', <b>em dólares</b>, como lá está':'')+'. Entre esta leitura e a anterior há um '
+    + 'euro observado — e é ele que reparte o custo pelas chamadas do '+esc(k.nome)
+    + ' que caíram no meio.'
+    + (fora?' Passa a euros a '+esc(decFmt(k.eur_por_unidade,2))+' € por dólar (muda-se em Definições).':'');
 }
 
 function ltAgora(){
@@ -1413,22 +1523,31 @@ function ltAgora(){
 async function ltCarregar(){
   const q=document.getElementById('lt-quando');
   if(q&&!q.value)q.value=ltAgora();
+  ltSegs();
   ltSync();
   const jb=document.getElementById('lt-janelas'),lb=document.getElementById('lt-lista');
   jb.innerHTML='<div class="vazio-msg">a carregar…</div>';lb.innerHTML='';
   let js=[],ls=[];
   try{
+    LT_CONTAS=(await iaRpc('listar_contas',{}))||[];
     js=(await iaRpc('janelas',{}))||[];
     ls=(await iaRpc('listar_leituras',{}))||[];
   }catch(e){
     jb.innerHTML='<div class="aviso erro">'+esc(e.message)+'</div>';return;
   }
+  contasGuardar(LT_CONTAS);
+  if(LT_CONTAS.length&&!LT_CONTAS.some(function(k){return k.conta===LT_CONTA;}))LT_CONTA=LT_CONTAS[0].conta;
+  ltSegs();
+  ltSync();
+  const k=ltContaDe(LT_CONTA);
+  js=js.filter(function(j){return (j.conta||'google')===LT_CONTA;});
+  ls=ls.filter(function(l){return (l.conta||'google')===LT_CONTA;});
 
   /* ── A última leitura, para se saber com o que se está a comparar ── */
   const ult=ls[0];
   document.getElementById('lt-ultima').innerHTML=ult
     ? '<div class="lt-ult">Última leitura: <b>'+esc(diaHoraFmt(ult.lido_em))+'</b> · '
-      + (ult.tipo==='saldo'?'saldo ':'gasto ')+'<b class="num">'+esc(eurFmt(ult.valor_eur,2))+'</b>'
+      + (ult.tipo==='saldo'?'saldo ':'gasto ')+'<b class="num">'+esc(moedaFmt(ult.valor,ult.moeda||k.moeda,2))+'</b>'
       + ' <span class="t-mu">('+esc(desdeFmt(ult.lido_em))+')</span></div>'
     : '';
 
@@ -1439,15 +1558,15 @@ async function ltCarregar(){
      O `desvio` é a única coisa que este painel pode dizer sobre a
      qualidade da própria conta: quanto é que a estimativa das functions
      andava longe do que se pagou mesmo. */
-  let h='<div class="card"><h2>Janelas</h2>'
+  let h='<div class="card"><h2>Janelas do '+esc(k.nome)+'</h2>'
     + '<p class="nota">Cada par de leituras seguidas é uma janela. O <b>fator</b> é '
-    + 'o euro observado a dividir pela soma dos pesos das chamadas que lá caíram — '
+    + 'o euro observado a dividir pela soma dos pesos das chamadas do '+esc(k.nome)+' que lá caíram — '
     + 'e a soma dessas chamadas dá exactamente o euro da janela, por construção.</p>'
-    + '<p class="nota">A Google só mostra uma chamada no saldo algum tempo depois. Por isso '
+    + '<p class="nota">A consola só mostra uma chamada no saldo algum tempo depois. Por isso '
     + 'uma janela <b>sem chamadas</b> junta-se à anterior (o euro que lá apareceu é das '
     + 'chamadas de trás), e chamadas que ainda estavam a 0,00 € juntam-se à janela seguinte.</p>';
   if(!js.length){
-    h+='<div class="vazio-msg">Ainda não há duas leituras — é preciso um par para haver janela.</div>';
+    h+='<div class="vazio-msg">Ainda não há duas leituras desta conta — é preciso um par para haver janela.</div>';
   }
   h+='<div class="lst">';
   for(let i=0;i<js.length;i++){
@@ -1457,9 +1576,12 @@ async function ltCarregar(){
     const nj=Number(j.leituras||1);
     let tags='';
     if(nj>1)tags+='<span class="tag">'+nj+' leituras juntas</span>';
-    if(pend)tags+='<span class="tag wn">à espera da Google</span>';
+    if(pend)tags+='<span class="tag wn">à espera da consola</span>';
     if(mau)tags+='<span class="tag er">sem número</span>';
     const sub=[nFmt(j.chamadas)+(Number(j.chamadas)===1?' chamada':' chamadas')];
+    /* Numa conta em dólares, o que se leu na consola ao lado do euro que
+       se reparte: é com o dólar que se confere a janela. */
+    if(j.moeda&&j.moeda!=='EUR'&&j.real_moeda!=null)sub.push('lidos '+esc(moedaFmt(j.real_moeda,j.moeda,2)));
     if(j.fator!=null)sub.push('fator '+decFmt(j.fator,3));
     sub.push('estimado <span class="eur-est">'+esc(eurFmt(j.estimado_eur,2))+'</span>');
     /* Numa janela à espera da Google o desvio dava sempre -100%, que é
@@ -1482,7 +1604,7 @@ async function ltCarregar(){
      + (maus.length===1?'Essa não reparte':'Essas não repartem')+' custo nenhum.</div>';
   }
   if(js.some(function(j){return j.pendente;})){
-    h+='<div class="aviso">Há chamadas que a Google <b>ainda não cobrou</b>: a janela delas '
+    h+='<div class="aviso">Há chamadas que a consola <b>ainda não cobrou</b>: a janela delas '
      + 'deu 0,00 €. Não quer dizer que não custaram nada — levam o fator mais próximo, '
      + 'como <b>provisórias</b>, até uma leitura seguinte mostrar o euro.</div>';
   }
@@ -1494,13 +1616,13 @@ async function ltCarregar(){
   if(!ls.length)hl+='<div class="vazio-msg">Sem leituras.</div>';
   for(let i=0;i<ls.length;i++){
     const l=ls[i];
-    const carr=Number(l.carregado_eur||0)>0;
+    const carr=Number(l.carregado||0)>0,mo=l.moeda||k.moeda;
     hl+='<div class="li">'
       + '<div class="li-m"><div class="li-t">'+esc(diaHoraFmt(l.lido_em))+'</div>'
       +   '<div class="li-s">'+(l.tipo==='saldo'?'saldo':'gasto')
-      +     (carr?' · carregados '+esc(eurFmt(l.carregado_eur,2)):'')
+      +     (carr?' · carregados '+esc(moedaFmt(l.carregado,mo,2)):'')
       +     (l.nota?' · '+esc(l.nota):'')+'</div></div>'
-      + '<div class="li-v">'+esc(eurFmt(l.valor_eur,2))+'</div>'
+      + '<div class="li-v">'+esc(moedaFmt(l.valor,mo,2))+'</div>'
       + '<button class="mini" onclick="ltApagar('+Number(l.id)+')">Apagar</button>'
       + '</div>';
   }
@@ -1516,9 +1638,10 @@ async function ltGuardar(){
   const quando=document.getElementById('lt-quando').value;
   try{
     await iaRpc('registar_leitura',{
-      p_valor_eur:valor,
+      p_conta:LT_CONTA,
+      p_valor:valor,
       p_tipo:tipo,
-      p_carregado_eur:(tipo==='saldo'&&isFinite(carr))?carr:0,
+      p_carregado:(tipo==='saldo'&&isFinite(carr))?carr:0,
       p_lido_em:quando?new Date(quando).toISOString():null,
       p_nota:document.getElementById('lt-nota').value||null
     });
@@ -1551,13 +1674,28 @@ let PR_LINHAS=[];
 async function prCarregar(){
   const el=document.getElementById('pr-lista');
   el.innerHTML='<div class="vazio-msg">a carregar…</div>';
-  try{PR_LINHAS=(await iaRpc('listar_precos',{}))||[];}
+  try{
+    PR_LINHAS=(await iaRpc('listar_precos',{}))||[];
+    LT_CONTAS=(await iaRpc('listar_contas',{}))||[];
+  }
   catch(e){el.innerHTML='<div class="aviso erro">'+esc(e.message)+'</div>';return;}
+  contasGuardar(LT_CONTAS);
+  cbDesenhar();
+  /* Agrupados por CONTA, porque é só dentro dela que a proporção conta: o
+     Gemini em euros e o Claude em dólares nunca se dividem um pelo outro.
+     A pesquisa também não se cobra da mesma maneira nas duas. */
   let h='<div class="tw"><table><thead><tr><th>Modelo</th>'
     + '<th class="n">Entrada /1M</th><th class="n">Saída /1M</th>'
-    + '<th class="n">Pesquisa /pedido</th><th></th></tr></thead><tbody>';
+    + '<th class="n">Pesquisa</th><th></th></tr></thead><tbody>';
+  let conta;
   for(let i=0;i<PR_LINHAS.length;i++){
     const p=PR_LINHAS[i];
+    if(p.conta!==conta){
+      conta=p.conta;
+      const k=ltContaDe(conta);
+      h+='<tr class="pr-g"><td colspan="5">'+esc(k.nome)+' · em '+(k.moeda==='USD'?'dólares':'euros')
+        + ' · pesquisa '+(conta==='anthropic'?'a pesquisa':'por pedido')+'</td></tr>';
+    }
     h+='<tr><td class="t-app">'+esc(p.modelo)
       + (p.nota?'<span class="t-sub">'+esc(p.nota)+'</span>':'')+'</td>'
       + '<td class="n"><input id="pr-e'+i+'" type="number" step="0.01" min="0" value="'+esc(p.eur_entrada_1m)+'"></td>'
@@ -1577,10 +1715,37 @@ async function prGuardar(i){
   try{
     await iaRpc('definir_preco',{
       p_modelo:p.modelo,p_entrada:e,p_saida:s,
-      p_pensamento:p.eur_pensamento_1m,p_pesquisa:q,p_nota:p.nota
+      p_pensamento:p.eur_pensamento_1m,p_pesquisa:q,p_nota:p.nota,p_conta:p.conta
     });
   }catch(err){toast(err.message,true);return;}
   toast('Rácios guardados — o custo de cada chamada foi refeito');
+  RS_DADOS=null;
+  await prCarregar();
+}
+
+/* ── O câmbio de uma conta que não é em euros ── */
+function cbDesenhar(){
+  const el=document.getElementById('cb-lista');
+  let h='';
+  for(let i=0;i<LT_CONTAS.length;i++){
+    const k=LT_CONTAS[i];
+    if(k.moeda==='EUR')continue;
+    h+='<div class="fl"><label for="cb-'+i+'">'+esc(k.nome)+': euros por cada '
+      + (k.moeda==='USD'?'dólar':esc(k.moeda))+'</label>'
+      + '<div class="eur-in pq"><input id="cb-'+i+'" type="number" step="0.0001" min="0" inputmode="decimal" value="'
+      + esc(k.eur_por_unidade)+'"><span>€</span></div></div>'
+      + '<button class="sec" onclick="cbGuardar('+i+')">Guardar o câmbio</button>';
+  }
+  el.innerHTML=h||'<div class="vazio-msg">Todas as contas são em euros.</div>';
+}
+
+async function cbGuardar(i){
+  const k=LT_CONTAS[i];if(!k)return;
+  const v=parseFloat(String(document.getElementById('cb-'+i).value).replace(',','.'));
+  if(!isFinite(v)||v<=0){toast('Câmbio inválido.',true);return;}
+  try{await iaRpc('definir_cambio',{p_conta:k.conta,p_eur_por_unidade:v});}
+  catch(err){toast(err.message,true);return;}
+  toast('Câmbio guardado — o euro do '+k.nome+' foi refeito');
   RS_DADOS=null;
   await prCarregar();
 }
