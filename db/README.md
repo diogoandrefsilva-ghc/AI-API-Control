@@ -21,9 +21,11 @@ quem herdasse essa app o poder sobre a tabela que mede as outras.
 | 4 | `funcionalidades.sql` | o custo por app e por funcionalidade: a coluna `registos.funcionalidade`, `funcionalidades` (os nomes), `funcionalidade()`, `resumo_apps()` |
 | 5 | `utilizadores.sql` | o custo por utilizador: `custo_utilizadores()`, o cubo dia × app × utilizador |
 | 6 | `claude_sombra.sql` | as 22 chamadas ao Claude do primeiro dia (23/10/2026), que só ficaram em `garrafeira.ia_comparacao` |
+| 7 | `calendario_03nov.sql` | as chamadas do calendário do Goals de 02-03/11/2026 (o botão e o diagnóstico) que não ficaram aqui — ~11 € que o painel estava a dar à Garrafeira |
 
-Os seis são **idempotentes** — correm as vezes que forem precisas. O 6
-depende do 2 e da `garrafeira.ia_comparacao` (sem ela não faz nada). O 2
+Os sete são **idempotentes** — correm as vezes que forem precisas. O 6
+depende do 2 e da `garrafeira.ia_comparacao` (sem ela não faz nada). O 7
+depende do 2 e do 4 e lê o `goals.sync_log`. O 2
 depende do 1, o 4 e o 5 do 1 e do 2 (usa a `registos`, a `config` e a `sou_admin()`). O 3 depende
 do 1 e da vista `winecatalog.consumo`, que é da WineCatalog
 (`WineCatalog/db/catalogo.sql`) — é a única coisa deste painel que não sai
