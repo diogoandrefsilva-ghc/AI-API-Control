@@ -248,6 +248,10 @@ INSERT INTO ia_uso.funcoes (funcao, grounding, nota) VALUES
   ('garrafeira-carta',      false, 'Sugestões da Garrafeira: lê a carta e ordena — sem pesquisa'),
   ('garrafeira-produtores', false, 'Backoffice: produtores com IA — sem pesquisa'),
   ('garrafeira-colheitas',  false, 'Backoffice: colheitas que não batem — sem pesquisa'),
+  -- Não tem IA nenhuma: só chama o Serper (modelo 'serper', zero tokens).
+  -- O Serper paga-se a outro fornecedor, não entra no saldo da Google nem
+  -- no da Anthropic — por isso `false`, e a chamada não leva euro medido.
+  ('garrafeira-precos',     false, 'Procura de preços: só Serper, sem IA — pago a outro fornecedor, fora dos dois saldos'),
   ('prendas-vinho',         true,  'pesquisa sempre (AnniversaryGifts); grava a coluna a sério, em booleano'),
   ('despesa-ia',            false, 'SplitWisely: texto (e foto do talão) → despesa em JSON; nunca pesquisa')
 ON CONFLICT (funcao) DO NOTHING;

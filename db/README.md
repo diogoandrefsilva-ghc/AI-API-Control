@@ -75,7 +75,7 @@ deste projeto é auto-contida). **Mexer no que se grava é mexer em todas.**
 | `splitbill` | `fatura-restaurante` | SplitBill |
 | `festasbv` | `fatura-ocr` | FestasBV |
 | `goals` **ou** `splitbill` | `calendario-sporting` | Goals |
-| `garrafeira` | `garrafeira-carta`, `garrafeira-produtores`, `garrafeira-colheitas` | Garrafeira |
+| `garrafeira` | `garrafeira-carta`, `garrafeira-produtores`, `garrafeira-colheitas`, `garrafeira-precos` | Garrafeira |
 | `splitwisely` | `despesa-ia` | SplitWisely |
 | `anniversarygifts` | `prendas-vinho` | AnniversaryGifts |
 
